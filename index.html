@@ -4,13 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Kahoot 2 — Quiz with Friends</title>
-<link rel="stylesheet" href="css/style.css?v=3" />
+<link rel="stylesheet" href="css/style.css?v=4" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
 <button id="soundBtn" title="Sound on/off">🔊</button>
+
+<!-- Fullscreen 3-2-1 countdown overlay -->
+<div id="countdown" class="hidden">
+  <div>
+    <div class="cd-label">Get ready!</div>
+    <div id="countdownNum"></div>
+  </div>
+</div>
 
 <!-- ============ HOME ============ -->
 <div id="home" class="screen">
@@ -82,7 +90,8 @@
 <div id="hostReveal" class="screen hidden">
   <h1 class="logo" style="font-size:30px" id="revealTitle">Scoreboard</h1>
   <div id="revealLb" class="lb"></div>
-  <button id="nextBtn" class="btn green" style="max-width:320px">Next →</button>
+  <div id="revealCountdown" class="reveal-cd"></div>
+  <button id="nextBtn" class="btn green" style="max-width:320px">Skip →</button>
 </div>
 
 <!-- ============ HOST: FINAL ============ -->
@@ -122,6 +131,6 @@
   </div>
 </div>
 
-<script src="js/game.js?v=3"></script>
+<script src="js/game.js?v=4"></script>
 </body>
 </html>

@@ -158,3 +158,29 @@ a.link{color:#fff; text-decoration:underline; cursor:pointer; font-size:14px;}
   0%{transform:translateY(0) rotate(0); opacity:1;}
   100%{transform:translateY(110vh) rotate(720deg); opacity:1;}
 }
+
+/* 3-2-1 countdown overlay */
+#countdown{
+  position:fixed; inset:0; z-index:200; color:#fff; text-align:center;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at center, rgba(108,33,217,.96), rgba(70,23,143,.98));
+}
+#countdown.hidden{display:none;}
+.cd-label{font-size:clamp(20px,5vw,34px); font-weight:800; letter-spacing:1px; opacity:.9;}
+#countdownNum{font-size:clamp(110px,34vw,260px); font-weight:900; line-height:1; text-shadow:0 6px 0 rgba(0,0,0,.25);}
+.cd-anim{animation:cdPop .9s ease forwards;}
+@keyframes cdPop{
+  0%{transform:scale(.2); opacity:0;}
+  25%{transform:scale(1.12); opacity:1;}
+  70%{transform:scale(1); opacity:1;}
+  100%{transform:scale(1.7); opacity:0;}
+}
+
+/* Scoreboard 5s countdown */
+.reveal-cd{
+  color:#fff; font-weight:900; font-size:22px; min-height:30px;
+  display:flex; align-items:center; gap:8px;
+}
+.reveal-cd::before{content:"⏱"; font-size:24px;}
+.cd-pulse{animation:cdPulse .9s ease;}
+@keyframes cdPulse{0%{transform:scale(1.35);}60%{transform:scale(1);}100%{transform:scale(1);}}

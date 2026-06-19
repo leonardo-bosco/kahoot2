@@ -79,6 +79,7 @@ const Sound = (() => {
     correct(){ if(muted) return; const c = ac(); if(!c) return; const t = c.currentTime; tone(659.25,t,0.12,"square",0.28); tone(987.77,t+0.1,0.22,"square",0.28); },
     wrong(){ if(muted) return; const c = ac(); if(!c) return; const t = c.currentTime; tone(311.13,t,0.18,"sawtooth",0.22); tone(207.65,t+0.12,0.3,"sawtooth",0.22); },
     tick(){ if(muted) return; const c = ac(); if(c) tone(1200, c.currentTime, 0.04, "square", 0.12); },
+    beep(freq, dur){ if(muted) return; const c = ac(); if(c) tone(freq||880, c.currentTime, dur||0.15, "square", 0.3); },
     victory(){
       if(muted) return; const c = ac(); if(!c) return; this.stopLobby();
       let t = c.currentTime + 0.03;
@@ -222,6 +223,50 @@ const RING_C = 2 * Math.PI * 32; // circumference of timer ring (r=32)
 
 function broadcast(msg){ Object.values(conns).forEach(p => { try{ p.conn.send(msg); }catch(e){} }); }
 
+let revealTimer = null;
+let revealDone = false;
+
+// Fullscreen 3-2-1 countdown, then run done()
+function runCountdown(done){
+  const overlay = $("countdown"), num = $("countdownNum");
+  const seq = ["3","2","1","GO!"], freqs = [440,550,660,900];
+  overlay.classList.remove("hidden");
+  let i = 0;
+  (function stepCd(){
+    if(i >= seq.length){ overlay.classList.add("hidden"); done(); return; }
+    num.textContent = seq[i];
+    num.classList.remove("cd-anim"); void num.offsetWidth; num.classList.add("cd-anim");
+    Sound.beep(freqs[i], i === seq.length-1 ? 0.32 : 0.15);
+    i++;
+    setTimeout(stepCd, 900);
+  })();
+}
+
+// 5-second animated countdown on the scoreboard, then advance
+function startRevealCountdown(last){
+  revealDone = false;
+  let n = 5;
+  const el = $("revealCountdown");
+  const label = last ? "Winners in " : "Next question in ";
+  const paint = () => {
+    el.textContent = label + n + "s";
+    el.classList.remove("cd-pulse"); void el.offsetWidth; el.classList.add("cd-pulse");
+  };
+  paint();
+  clearInterval(revealTimer);
+  revealTimer = setInterval(() => {
+    n--;
+    if(n <= 0){ advanceFromReveal(last); return; }
+    paint();
+  }, 1000);
+}
+function advanceFromReveal(last){
+  if(revealDone) return;
+  revealDone = true;
+  clearInterval(revealTimer); revealTimer = null;
+  if(last) endGame(); else nextQuestion();
+}
+
 $("createGameBtn").onclick = () => {
   const err = validateQuiz();
   if(err){ $("setupErr").textContent = err; $("setupErr").classList.remove("hidden"); return; }
@@ -318,7 +363,12 @@ function updateLobby(){
 }
 
 $("cancelHostLink").onclick = () => { teardownPeer(); show("home"); };
-$("startGameBtn").onclick = () => { if(Object.keys(conns).length){ Sound.stopLobby(); nextQuestion(); } };
+$("startGameBtn").onclick = () => {
+  if(!Object.keys(conns).length) return;
+  Sound.unlock(); Sound.stopLobby();
+  broadcast({type:"getReady"});
+  runCountdown(() => nextQuestion());
+};
 
 function nextQuestion(){
   curQ++;
@@ -389,11 +439,12 @@ function endQuestion(){
     $("revealLb").innerHTML = ranked.slice(0,8).map((p,i)=>
       `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("")
       || `<div class="item"><span>No players</span><span></span></div>`;
-    $("nextBtn").textContent = last ? "See winners 🏆" : "Next question →";
+    $("nextBtn").textContent = last ? "See winners 🏆" : "Skip →";
+    startRevealCountdown(last);
   }, 1200);
 }
 
-$("nextBtn").onclick = () => { if(curQ+1 >= quiz.length) endGame(); else nextQuestion(); };
+$("nextBtn").onclick = () => advanceFromReveal(curQ+1 >= quiz.length);
 
 function endGame(){ broadcastEnd(); showFinal(); }
 
@@ -423,6 +474,7 @@ $("playAgainBtn").onclick = () => { teardownPeer(); show("home"); };
 
 function teardownPeer(){
   clearInterval(timerInt);
+  clearInterval(revealTimer); revealTimer = null;
   Sound.stopLobby();
   Sound.stopTension();
   try{ broadcast({type:"kicked"}); }catch(e){}
@@ -498,6 +550,12 @@ function handleHostData(data){
       $("joinStatus").textContent = data.reason || "Can't join.";
       $("joinBtn").disabled = false;
       try{ myPeer.destroy(); }catch(e){}
+      break;
+    case "getReady":
+      $("pwTitle").textContent = "Get ready!";
+      $("pwName").textContent = myEmoji + " " + myName;
+      $("pwMsg").textContent = "Starting in 3… 2… 1…";
+      show("playerWait");
       break;
     case "question":
       showPlayerQuestion(data);
