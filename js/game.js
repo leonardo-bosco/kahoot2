@@ -105,18 +105,12 @@ function confetti(){
 
 /* ---------------- QR code ---------------- */
 function renderQR(){
+  if(typeof QRCode === "undefined") return;       // lib failed to load — skip gracefully
   const url = location.href.split("#")[0];
-  const local = location.protocol === "file:";
-  if($("qrHint")) $("qrHint").textContent = local
-    ? "Once published online, this opens the game."
-    : "Point your phone camera here.";
-  if(typeof QRCode === "undefined"){ if($("qrCard")) $("qrCard").classList.add("hidden"); return; }
-  ["qrCanvas","qrCanvasLobby"].forEach(id => {
-    const el = $(id); if(!el) return;
-    el.innerHTML = "";
-    try{ new QRCode(el, { text:url, width:170, height:170, correctLevel: QRCode.CorrectLevel.M }); }
-    catch(e){ console.warn("QR error", e); }
-  });
+  const el = $("qrCanvasLobby"); if(!el) return;   // QR only shown in the host lobby
+  el.innerHTML = "";
+  try{ new QRCode(el, { text:url, width:170, height:170, correctLevel: QRCode.CorrectLevel.M }); }
+  catch(e){ console.warn("QR error", e); }
 }
 
 /* ---------------- Emoji picker ---------------- */
