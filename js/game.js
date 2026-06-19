@@ -495,7 +495,7 @@ function showFinal(){
     const el = $("pod-" + rank);
     if(el){ el.classList.remove("pod-hidden"); el.classList.add("pod-reveal"); Sound.cymbal(); }
   };
-  // 3s suspense → 3rd, +3s → 2nd, +1s → 1st (then fanfare + confetti + full board)
+  // drumroll runs the whole time; 3s of tension before each reveal: 3rd, 2nd, 1st
   setTimeout(() => reveal(3), 3000);
   setTimeout(() => reveal(2), 6000);
   setTimeout(() => {
@@ -505,7 +505,7 @@ function showFinal(){
     confetti();
     $("finalLb").innerHTML = ranked.slice(0,8).map((p,i)=>
       `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("");
-  }, 7000);
+  }, 9000);
 }
 $("playAgainBtn").onclick = () => { teardownPeer(); show("home"); };
 
