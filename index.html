@@ -6,8 +6,11 @@
 <title>Kahoot 2 — Quiz with Friends</title>
 <link rel="stylesheet" href="css/style.css" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+
+<button id="soundBtn" title="Sound on/off">🔊</button>
 
 <!-- ============ HOME ============ -->
 <div id="home" class="screen">
@@ -17,8 +20,15 @@
     <div class="label" style="color:var(--ink)">Have a game PIN?</div>
     <input id="joinPin" class="pin-input" inputmode="numeric" maxlength="6" placeholder="PIN" />
     <input id="joinName" style="margin-top:10px" maxlength="16" placeholder="Your nickname" />
+    <div class="label" style="color:var(--ink);margin-top:12px">Pick your emoji</div>
+    <div id="emojiPicker" class="emoji-grid"></div>
     <button id="joinBtn" class="btn primary" style="margin-top:12px">Join game</button>
     <div id="joinStatus" class="muted" style="text-align:center;margin-top:8px"></div>
+  </div>
+  <div class="card" id="qrCard">
+    <div class="label" style="color:var(--ink)">📱 Scan to open on your phone</div>
+    <div class="qr-wrap"><div id="qrCanvas"></div></div>
+    <p class="muted" id="qrHint" style="text-align:center;margin-top:8px">Point your phone camera here.</p>
   </div>
   <div class="card">
     <button id="hostBtn" class="btn purple">Host a new game</button>
@@ -47,6 +57,8 @@
 <div id="lobby" class="screen hidden">
   <p class="sub">Join at this device — enter the PIN:</p>
   <div id="pinBox" class="pin-display">------</div>
+  <div class="qr-wrap small"><div id="qrCanvasLobby"></div></div>
+  <p class="muted" style="color:#e9d8ff">Scan the QR, then type the PIN</p>
   <div id="lobbyStatus" class="status">Starting…</div>
   <div class="count"><span id="playerCount">0</span> players joined</div>
   <div id="lobbyPlayers" class="players"></div>
@@ -58,7 +70,13 @@
 <div id="hostQuestion" class="screen hidden">
   <div class="qbar">
     <span id="hqProgress">Q1</span>
-    <div id="hqTimer" class="timer">20</div>
+    <div class="timer-wrap">
+      <svg viewBox="0 0 72 72">
+        <circle class="ring-bg" cx="36" cy="36" r="32"></circle>
+        <circle id="hqRing" class="ring-fg" cx="36" cy="36" r="32"></circle>
+      </svg>
+      <div id="hqTimer" class="timer">20</div>
+    </div>
     <span><span id="hqAnswered">0</span> answered</span>
   </div>
   <div id="hqText" class="qtext"></div>
