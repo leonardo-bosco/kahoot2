@@ -205,7 +205,7 @@ function renderEditor(){
       ansHtml += `
         <div class="ansrow">
           <input type="text" data-qi="${qi}" data-ai="${i}" class="ans-text"
-                 placeholder="Answer ${SHAPES[i]}" value="${esc(item.a[i])}" maxlength="75" />
+                 placeholder="Answer ${SHAPES[i]}" value="${esc(item.a[i])}" />
           <label class="pick">
             <input type="radio" name="correct-${qi}" data-qi="${qi}" data-ai="${i}"
                    ${item.correct===i?"checked":""} style="width:auto" /> correct
@@ -217,13 +217,16 @@ function renderEditor(){
         <strong>Question ${qi+1}</strong>
         <button class="btn ghost small del-q" data-qi="${qi}">Remove</button>
       </div>
-      <textarea class="q-text" data-qi="${qi}" placeholder="Type your question…" maxlength="120">${esc(item.q)}</textarea>
+      <textarea class="q-text" data-qi="${qi}" placeholder="Type your question…">${esc(item.q)}</textarea>
       ${ansHtml}`;
     wrap.appendChild(block);
   });
 
-  wrap.querySelectorAll(".q-text").forEach(el =>
-    el.oninput = e => quiz[+e.target.dataset.qi].q = e.target.value);
+  const grow = el => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
+  wrap.querySelectorAll(".q-text").forEach(el => {
+    grow(el);
+    el.oninput = e => { quiz[+e.target.dataset.qi].q = e.target.value; grow(e.target); };
+  });
   wrap.querySelectorAll(".ans-text").forEach(el =>
     el.oninput = e => quiz[+e.target.dataset.qi].a[+e.target.dataset.ai] = e.target.value);
   wrap.querySelectorAll('input[type=radio]').forEach(el =>
