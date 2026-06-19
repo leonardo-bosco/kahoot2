@@ -24,7 +24,7 @@ const SAMPLE = [
 =========================================================== */
 const Sound = (() => {
   let ctx = null, master = null, muted = false, lobbyTimer = null, step = 0;
-  let tensionTimer = null, tStep = 0, drumTimer = null;
+  let tensionTimer = null, tStep = 0, drumTimer = null, drumAccel = null, drumInterval = 95;
   const AC = window.AudioContext || window.webkitAudioContext;
   function ac(){
     if(!AC) return null;
@@ -101,8 +101,32 @@ const Sound = (() => {
       const seq = [[523.25,.16],[523.25,.16],[523.25,.16],[523.25,.4],[415.30,.4],[466.16,.4],[523.25,.18],[466.16,.18],[523.25,.7]];
       seq.forEach(([f,d]) => { tone(f,t,d,"square",0.26); tone(f/2,t,d,"triangle",0.14); t += d; });
     },
-    startDrumroll(){ if(!AC || muted) return; this.stopDrumroll(); drumTimer = setInterval(() => noiseHit(0.045, 0.16, 1800), 50); },
-    stopDrumroll(){ if(drumTimer){ clearInterval(drumTimer); drumTimer = null; } },
+    startDrumroll(){
+      if(!AC || muted) return;
+      this.stopDrumroll(); drumInterval = 95;
+      const step = () => {
+        const intensity = Math.min(1, (95 - drumInterval) / 72); // 0 = slow, 1 = fast
+        noiseHit(0.045, 0.13 + intensity*0.20, 1500 + intensity*1800); // louder + brighter as it speeds up
+        drumTimer = setTimeout(step, drumInterval);
+      };
+      step();
+    },
+    // Ramp the drum speed from current to targetMs over durationMs (the build-up)
+    accelerate(targetMs, durationMs){
+      if(!AC || muted || !drumTimer) return;
+      if(drumAccel) clearInterval(drumAccel);
+      const start = drumInterval, steps = Math.max(1, Math.floor(durationMs / 80));
+      let i = 0;
+      drumAccel = setInterval(() => {
+        i++;
+        drumInterval = Math.max(targetMs, start + (targetMs - start) * (i / steps));
+        if(i >= steps){ clearInterval(drumAccel); drumAccel = null; drumInterval = targetMs; }
+      }, 80);
+    },
+    stopDrumroll(){
+      if(drumTimer){ clearTimeout(drumTimer); drumTimer = null; }
+      if(drumAccel){ clearInterval(drumAccel); drumAccel = null; }
+    },
     cymbal(){ if(muted) return; noiseHit(0.55, 0.32, 5000); },
   };
 })();
@@ -491,11 +515,12 @@ function showFinal(){
   $("finalLb").innerHTML = "";
 
   Sound.startDrumroll();
+  Sound.accelerate(16, 11000);   // drum keeps speeding up, climaxing right at the 1st-place reveal
   const reveal = rank => {
     const el = $("pod-" + rank);
     if(el){ el.classList.remove("pod-hidden"); el.classList.add("pod-reveal"); Sound.cymbal(); }
   };
-  // drumroll runs the whole time; 3s of tension before each reveal: 3rd, 2nd, 1st
+  // 3s → 3rd, +3s → 2nd, then a big 5s build → 1st (fanfare + confetti + full board)
   setTimeout(() => reveal(3), 3000);
   setTimeout(() => reveal(2), 6000);
   setTimeout(() => {
@@ -505,7 +530,7 @@ function showFinal(){
     confetti();
     $("finalLb").innerHTML = ranked.slice(0,8).map((p,i)=>
       `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("");
-  }, 9000);
+  }, 11000);
 }
 $("playAgainBtn").onclick = () => { teardownPeer(); show("home"); };
 
