@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Kahoot 2 — Quiz with Friends</title>
+
+  <!-- Styles, split by responsibility -->
+  <link rel="stylesheet" href="src/styles/base.css" />
+  <link rel="stylesheet" href="src/styles/components.css" />
+  <link rel="stylesheet" href="src/styles/editor.css" />
+  <link rel="stylesheet" href="src/styles/animations.css" />
+
+  <!-- PeerJS provides the WebRTC signalling/transport (global `Peer`). -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <button id="soundBtn" title="Sound on/off">🔊</button>
+
+  <!-- ============ HOME ============ -->
+  <div id="home" class="screen">
+    <h1 class="logo">Kahoot&nbsp;2</h1>
+    <p class="sub">Play live quizzes with your friends — anywhere in the world.</p>
+    <div class="card">
+      <div class="label" style="color:var(--ink)">Have a game PIN?</div>
+      <input id="joinPin" class="pin-input" inputmode="numeric" maxlength="6" placeholder="PIN" />
+      <input id="joinName" style="margin-top:10px" maxlength="16" placeholder="Your nickname" />
+      <button id="joinBtn" class="btn primary" style="margin-top:12px">Join game</button>
+      <div id="joinStatus" class="muted" style="text-align:center;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <button id="hostBtn" class="btn purple">Host a new game</button>
+      <p class="muted" style="text-align:center;margin-top:10px">You'll get a PIN to share with friends.</p>
+    </div>
+  </div>
+
+  <!-- ============ HOST: QUIZ SETUP ============ -->
+  <div id="setup" class="screen hidden">
+    <h1 class="logo" style="font-size:34px">Build your quiz</h1>
+    <div class="card">
+      <div class="row" style="margin-bottom:14px">
+        <button id="useDefaultBtn" class="btn ghost small">Use sample quiz</button>
+        <button id="addQBtn" class="btn ghost small">+ Add question</button>
+      </div>
+      <div id="qeditor" class="qeditor"></div>
+      <div id="setupErr" class="err hidden" style="margin-top:14px"></div>
+      <div class="toolbar" style="margin-top:16px">
+        <button id="backHomeBtn" class="btn ghost">Back</button>
+        <button id="createGameBtn" class="btn green">Create game →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HOST: LOBBY ============ -->
+  <div id="lobby" class="screen hidden">
+    <p class="sub">Join at this device — enter the PIN:</p>
+    <div id="pinBox" class="pin-display">------</div>
+    <div id="lobbyStatus" class="status">Starting…</div>
+    <div class="count"><span id="playerCount">0</span> players joined</div>
+    <div id="lobbyPlayers" class="players"></div>
+    <button id="startGameBtn" class="btn green" style="max-width:320px" disabled>Start game</button>
+    <a id="cancelHostLink" class="link">Cancel game</a>
+  </div>
+
+  <!-- ============ HOST: QUESTION ============ -->
+  <div id="hostQuestion" class="screen hidden">
+    <div class="qbar">
+      <span id="hqProgress">Q1</span>
+      <div id="hqTimerWrap" class="timer-wrap">
+        <svg viewBox="0 0 72 72">
+          <circle class="ring-bg" cx="36" cy="36" r="32"></circle>
+          <circle id="hqRing" class="ring-fg" cx="36" cy="36" r="32"></circle>
+        </svg>
+        <div id="hqTimer" class="timer">20</div>
+      </div>
+      <span><span id="hqAnswered">0</span> answered</span>
+    </div>
+    <div id="hqText" class="qtext"></div>
+    <div id="hqAnswers" class="answers"></div>
+  </div>
+
+  <!-- ============ HOST: REVEAL / LEADERBOARD ============ -->
+  <div id="hostReveal" class="screen hidden">
+    <h1 class="logo" style="font-size:30px" id="revealTitle">Scoreboard</h1>
+    <div id="revealLb" class="lb"></div>
+    <button id="nextBtn" class="btn green" style="max-width:320px">Next →</button>
+  </div>
+
+  <!-- ============ HOST: FINAL ============ -->
+  <div id="hostFinal" class="screen hidden">
+    <h1 class="logo" style="font-size:40px">🏆 Winners</h1>
+    <div id="podium" class="podium"></div>
+    <div id="finalLb" class="lb" style="margin-top:16px"></div>
+    <button id="playAgainBtn" class="btn purple" style="max-width:320px;margin-top:10px">New game</button>
+  </div>
+
+  <!-- ============ PLAYER: WAITING ============ -->
+  <div id="playerWait" class="screen hidden">
+    <div class="center">
+      <div class="big" id="pwTitle">You're in!</div>
+      <div id="pwName" class="chip"></div>
+      <div id="pwMsg" class="status">Waiting for the host to start…</div>
+    </div>
+  </div>
+
+  <!-- ============ PLAYER: ANSWER ============ -->
+  <div id="playerAnswer" class="screen hidden" style="min-height:80vh">
+    <div class="qbar">
+      <span id="paProgress">Q1</span>
+      <span id="paName"></span>
+    </div>
+    <div id="paQuestion" class="qtext" style="min-height:60px;font-size:20px"></div>
+    <div id="paGrid" class="tapgrid"></div>
+  </div>
+
+  <!-- ============ PLAYER: FEEDBACK ============ -->
+  <div id="playerFeedback" class="screen hidden">
+    <div class="center">
+      <div id="pfIcon" class="feedback"></div>
+      <div id="pfText" class="big"></div>
+      <div id="pfScore" class="chip"></div>
+      <div id="pfRank" class="status"></div>
+    </div>
+  </div>
+
+  <!-- App entry point (ES module graph). -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
