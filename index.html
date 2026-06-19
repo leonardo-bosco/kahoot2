@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Kahoot 2 — Quiz with Friends</title>
-<link rel="stylesheet" href="css/style.css?v=2" />
+<link rel="stylesheet" href="css/style.css?v=3" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -24,11 +24,6 @@
     <div id="emojiPicker" class="emoji-grid"></div>
     <button id="joinBtn" class="btn primary" style="margin-top:12px">Join game</button>
     <div id="joinStatus" class="muted" style="text-align:center;margin-top:8px"></div>
-  </div>
-  <div class="card" id="qrCard">
-    <div class="label" style="color:var(--ink)">📱 Scan to open on your phone</div>
-    <div class="qr-wrap"><div id="qrCanvas"></div></div>
-    <p class="muted" id="qrHint" style="text-align:center;margin-top:8px">Point your phone camera here.</p>
   </div>
   <div class="card">
     <button id="hostBtn" class="btn purple">Host a new game</button>
@@ -127,6 +122,6 @@
   </div>
 </div>
 
-<script src="js/game.js?v=2"></script>
+<script src="js/game.js?v=3"></script>
 </body>
 </html>

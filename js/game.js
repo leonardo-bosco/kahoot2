@@ -24,6 +24,7 @@ const SAMPLE = [
 =========================================================== */
 const Sound = (() => {
   let ctx = null, master = null, muted = false, lobbyTimer = null, step = 0;
+  let tensionTimer = null, tStep = 0;
   const AC = window.AudioContext || window.webkitAudioContext;
   function ac(){
     if(!AC) return null;
@@ -57,12 +58,23 @@ const Sound = (() => {
     if(arp === 0) tone(chord[0]/2, t, 0.42, "triangle", 0.16); // bass
     step++;
   }
+  // Tension loop (during questions): pulsing heartbeat bass + minor arpeggio
+  const TENSION = [220.00, 261.63, 329.63, 261.63]; // A minor arp: A C E C
+  function tensionStep(){
+    const c = ac(); if(!c) return;
+    const t = c.currentTime + 0.02;
+    tone(110, t, 0.10, "triangle", 0.17);                       // heartbeat bass
+    tone(TENSION[tStep % TENSION.length], t, 0.11, "square", 0.07); // ticking arp
+    tStep++;
+  }
   return {
     unlock(){ ac(); },
     isMuted(){ return muted; },
-    setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.22; if(m) this.stopLobby(); },
+    setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.22; if(m){ this.stopLobby(); this.stopTension(); } },
     startLobby(){ if(!AC || muted) return; this.stopLobby(); step = 0; lobbyStep(); lobbyTimer = setInterval(lobbyStep, 185); },
     stopLobby(){ if(lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer = null; } },
+    startTension(){ if(!AC || muted) return; this.stopTension(); tStep = 0; tensionStep(); tensionTimer = setInterval(tensionStep, 165); },
+    stopTension(){ if(tensionTimer){ clearInterval(tensionTimer); tensionTimer = null; } },
     click(){ if(muted) return; const c = ac(); if(c) tone(880, c.currentTime, 0.07, "square", 0.25); },
     correct(){ if(muted) return; const c = ac(); if(!c) return; const t = c.currentTime; tone(659.25,t,0.12,"square",0.28); tone(987.77,t+0.1,0.22,"square",0.28); },
     wrong(){ if(muted) return; const c = ac(); if(!c) return; const t = c.currentTime; tone(311.13,t,0.18,"sawtooth",0.22); tone(207.65,t+0.12,0.3,"sawtooth",0.22); },
@@ -134,7 +146,10 @@ $("soundBtn").onclick = () => {
   Sound.setMuted(nowMuted);
   $("soundBtn").textContent = nowMuted ? "🔇" : "🔊";
   $("soundBtn").classList.toggle("off", nowMuted);
-  if(!nowMuted && !$("lobby").classList.contains("hidden")) Sound.startLobby();
+  if(!nowMuted){
+    if(!$("lobby").classList.contains("hidden")) Sound.startLobby();
+    else if(!$("hostQuestion").classList.contains("hidden") && qLive) Sound.startTension();
+  }
 };
 
 /* ===========================================================
@@ -331,6 +346,7 @@ function nextQuestion(){
 
   qStart = Date.now();
   qLive = true;
+  Sound.startTension();
   let t = QTIME;
   $("hqTimer").textContent = t;
   const ring = $("hqRing");
@@ -342,7 +358,6 @@ function nextQuestion(){
     t--;
     $("hqTimer").textContent = Math.max(0,t);
     if(ring) ring.style.strokeDashoffset = (RING_C * (1 - t / QTIME)).toFixed(1);
-    if(t <= 5 && t > 0) Sound.tick();
     if(t <= 0) endQuestion();
   }, 1000);
 }
@@ -351,6 +366,7 @@ function endQuestion(){
   clearInterval(timerInt);
   if(curQ < 0 || !qLive) return;
   qLive = false;
+  Sound.stopTension();
   const q = quiz[curQ];
 
   // highlight correct on host
@@ -414,6 +430,7 @@ $("playAgainBtn").onclick = () => { teardownPeer(); show("home"); };
 function teardownPeer(){
   clearInterval(timerInt);
   Sound.stopLobby();
+  Sound.stopTension();
   try{ broadcast({type:"kicked"}); }catch(e){}
   if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
   conns={}; curQ=-1; pin=null;
