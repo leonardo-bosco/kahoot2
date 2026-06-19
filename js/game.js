@@ -24,7 +24,7 @@ const SAMPLE = [
 =========================================================== */
 const Sound = (() => {
   let ctx = null, master = null, muted = false, lobbyTimer = null, step = 0;
-  let tensionTimer = null, tStep = 0;
+  let tensionTimer = null, tStep = 0, drumTimer = null;
   const AC = window.AudioContext || window.webkitAudioContext;
   function ac(){
     if(!AC) return null;
@@ -41,6 +41,21 @@ const Sound = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     o.connect(g); g.connect(master);
     o.start(start); o.stop(start + dur + 0.05);
+  }
+  // Short noise burst (snare-ish) for drum rolls / crashes
+  function noiseHit(dur, vol, hp){
+    const c = ac(); if(!c) return;
+    const n = Math.max(1, Math.floor(c.sampleRate * dur));
+    const buf = c.createBuffer(1, n, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = (Math.random()*2 - 1) * (1 - i/n);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol || 0.2, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    const f = c.createBiquadFilter(); f.type = "highpass"; f.frequency.value = hp || 1500;
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start();
   }
   // Lobby loop: arpeggiated chord progression
   const CHORDS = [
@@ -70,7 +85,7 @@ const Sound = (() => {
   return {
     unlock(){ ac(); },
     isMuted(){ return muted; },
-    setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.22; if(m){ this.stopLobby(); this.stopTension(); } },
+    setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.22; if(m){ this.stopLobby(); this.stopTension(); this.stopDrumroll(); } },
     startLobby(){ if(!AC || muted) return; this.stopLobby(); step = 0; lobbyStep(); lobbyTimer = setInterval(lobbyStep, 185); },
     stopLobby(){ if(lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer = null; } },
     startTension(){ if(!AC || muted) return; this.stopTension(); tStep = 0; tensionStep(); tensionTimer = setInterval(tensionStep, 165); },
@@ -86,6 +101,9 @@ const Sound = (() => {
       const seq = [[523.25,.16],[523.25,.16],[523.25,.16],[523.25,.4],[415.30,.4],[466.16,.4],[523.25,.18],[466.16,.18],[523.25,.7]];
       seq.forEach(([f,d]) => { tone(f,t,d,"square",0.26); tone(f/2,t,d,"triangle",0.14); t += d; });
     },
+    startDrumroll(){ if(!AC || muted) return; this.stopDrumroll(); drumTimer = setInterval(() => noiseHit(0.045, 0.16, 1800), 50); },
+    stopDrumroll(){ if(drumTimer){ clearInterval(drumTimer); drumTimer = null; } },
+    cymbal(){ if(muted) return; noiseHit(0.55, 0.32, 5000); },
   };
 })();
 
@@ -218,7 +236,7 @@ let curQ = -1;
 let qStart = 0;
 let timerInt = null;
 let qLive = false;
-const QTIME = 20;           // seconds per question
+const QTIME = 30;           // seconds per question
 const RING_C = 2 * Math.PI * 32; // circumference of timer ring (r=32)
 
 function broadcast(msg){ Object.values(conns).forEach(p => { try{ p.conn.send(msg); }catch(e){} }); }
@@ -229,7 +247,7 @@ let revealDone = false;
 // Fullscreen 3-2-1 countdown, then run done()
 function runCountdown(done){
   const overlay = $("countdown"), num = $("countdownNum");
-  const seq = ["3","2","1","GO!"], freqs = [440,550,660,900];
+  const seq = ["5","4","3","2","1","GO!"], freqs = [392,440,494,554,659,900];
   overlay.classList.remove("hidden");
   let i = 0;
   (function stepCd(){
@@ -245,7 +263,7 @@ function runCountdown(done){
 // 5-second animated countdown on the scoreboard, then advance
 function startRevealCountdown(last){
   revealDone = false;
-  let n = 5;
+  let n = 10;
   const el = $("revealCountdown");
   const label = last ? "Winners in " : "Next question in ";
   const paint = () => {
@@ -353,7 +371,9 @@ function everyoneAnswered(){
   return ps.length > 0 && ps.every(p => p.answered);
 }
 function updateAnsweredCount(){
-  $("hqAnswered").textContent = Object.values(conns).filter(p=>p.answered).length;
+  const total = Object.keys(conns).length;
+  const ans = Object.values(conns).filter(p=>p.answered).length;
+  $("hqAnswered").textContent = `${ans}/${total}`;
 }
 function updateLobby(){
   const ps = Object.values(conns);
@@ -380,7 +400,7 @@ function nextQuestion(){
   show("hostQuestion");
   $("hqProgress").textContent = `Q${curQ+1} / ${quiz.length}`;
   $("hqText").textContent = q.q;
-  $("hqAnswered").textContent = "0";
+  updateAnsweredCount();
   $("hqAnswers").innerHTML = q.a.map((t,i)=>
     `<div class="ans ${NAMES[i]}"><span class="shape">${SHAPES[i]}</span>${esc(t)}</div>`).join("");
 
@@ -456,19 +476,36 @@ function broadcastEnd(){
 function showFinal(){
   show("hostFinal");
   const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
-  const top3 = ranked.slice(0,3);
-  const order = [1,0,2]; // place 2nd, 1st, 3rd
-  const medals = ["🥇","🥈","🥉"];
-  $("podium").innerHTML = order.map(idx=>{
-    if(!top3[idx]) return "";
-    const cls = idx===0?"p1":idx===1?"p2":"p3";
-    return `<div class="pod ${cls}"><div class="medal">${medals[idx]}</div>
-      <div class="nm">${dn(top3[idx])}</div><div class="pt">${top3[idx].score}</div></div>`;
-  }).join("");
-  $("finalLb").innerHTML = ranked.slice(0,8).map((p,i)=>
-    `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("");
-  Sound.victory();
-  confetti();
+  ranked.forEach((p,i)=>p.rank=i+1);
+  const medal = {1:"🥇",2:"🥈",3:"🥉"};
+  const byRank = r => ranked[r-1];
+  const podHtml = rank => {
+    const p = byRank(rank); if(!p) return "";
+    const cls = rank===1?"p1":rank===2?"p2":"p3";
+    return `<div class="pod ${cls} pod-hidden" id="pod-${rank}">
+      <div class="medal">${medal[rank]}</div>
+      <div class="nm">${dn(p)}</div><div class="pt">${p.score}</div></div>`;
+  };
+  // visual order on the podium: 2nd (left), 1st (center), 3rd (right) — all start hidden
+  $("podium").innerHTML = podHtml(2) + podHtml(1) + podHtml(3);
+  $("finalLb").innerHTML = "";
+
+  Sound.startDrumroll();
+  const reveal = rank => {
+    const el = $("pod-" + rank);
+    if(el){ el.classList.remove("pod-hidden"); el.classList.add("pod-reveal"); Sound.cymbal(); }
+  };
+  // 3s suspense → 3rd, +3s → 2nd, +1s → 1st (then fanfare + confetti + full board)
+  setTimeout(() => reveal(3), 3000);
+  setTimeout(() => reveal(2), 6000);
+  setTimeout(() => {
+    reveal(1);
+    Sound.stopDrumroll();
+    Sound.victory();
+    confetti();
+    $("finalLb").innerHTML = ranked.slice(0,8).map((p,i)=>
+      `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("");
+  }, 7000);
 }
 $("playAgainBtn").onclick = () => { teardownPeer(); show("home"); };
 
@@ -477,6 +514,7 @@ function teardownPeer(){
   clearInterval(revealTimer); revealTimer = null;
   Sound.stopLobby();
   Sound.stopTension();
+  Sound.stopDrumroll();
   try{ broadcast({type:"kicked"}); }catch(e){}
   if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
   conns={}; curQ=-1; pin=null;
@@ -545,6 +583,7 @@ function handleHostData(data){
       $("pwName").textContent = myEmoji + " " + myName;
       $("pwMsg").textContent = "Waiting for the host to start…";
       show("playerWait");
+      Sound.startLobby();
       break;
     case "joinDenied":
       $("joinStatus").textContent = data.reason || "Can't join.";
@@ -575,6 +614,7 @@ function handleHostData(data){
       $("pfText").textContent = data.rank===1 ? "You won!" : `You finished #${data.rank} of ${data.total}`;
       $("pfScore").textContent = data.score + " pts";
       $("pfRank").textContent = "Thanks for playing!";
+      Sound.stopTension(); Sound.stopLobby();
       show("playerFeedback");
       if(data.rank===1){ Sound.victory(); confetti(); }
       break;
@@ -588,6 +628,7 @@ function handleHostData(data){
 function showPlayerQuestion(d){
   answeredThis = false;
   show("playerAnswer");
+  Sound.stopLobby(); Sound.startTension();
   $("paProgress").textContent = `Q${d.index+1} / ${d.total}`;
   $("paName").textContent = myEmoji + " " + myName;
   $("paQuestion").textContent = d.question;
@@ -610,6 +651,7 @@ function sendAnswer(choice, btn){
 }
 function showPlayerReveal(d){
   show("playerFeedback");
+  Sound.stopTension();
   if(d.correct){
     $("pfIcon").textContent = "✅";
     $("pfText").textContent = "Correct!";

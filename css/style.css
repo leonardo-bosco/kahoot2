@@ -133,7 +133,9 @@ button:disabled{opacity:.5; cursor:not-allowed;}
 @keyframes slideIn{from{transform:translateX(-16px);opacity:0;}to{transform:none;opacity:1;}}
 .lb .item .pts{color:var(--blue);}
 .podium{display:flex; align-items:flex-end; gap:14px; justify-content:center; width:100%; margin-top:10px;}
-.pod{background:#fff; border-radius:12px 12px 0 0; padding:16px 12px; text-align:center; font-weight:900; color:var(--ink); transform-origin:bottom; animation:rise .6s cubic-bezier(.2,.8,.3,1.2);}
+.pod{background:#fff; border-radius:12px 12px 0 0; padding:16px 12px; text-align:center; font-weight:900; color:var(--ink); transform-origin:bottom;}
+.pod-hidden{opacity:0; transform:scaleY(0);}
+.pod-reveal{animation:rise .6s cubic-bezier(.2,.8,.3,1.2);}
 @keyframes rise{from{transform:scaleY(0);opacity:0;}to{transform:scaleY(1);opacity:1;}}
 .pod .nm{font-size:18px;} .pod .pt{color:var(--blue); font-size:15px;}
 .pod.p1{height:200px; flex:1.2;} .pod.p2{height:150px; flex:1;} .pod.p3{height:120px; flex:1;}
