@@ -462,8 +462,8 @@ function handlePlayerData(conn, data){
     const correct = data.choice === q.correct;
     let delta = 0;
     if(correct){
-      const frac = Math.max(0, 1 - (elapsed / QTIME));
-      delta = Math.round(500 + 500 * frac);
+      const frac = Math.max(0, 1 - (elapsed / QTIME)); // 1 = instant, 0 = used all the time
+      delta = Math.round(200 + 800 * frac);            // speed matters a lot: ~1000 fast, ~200 slow
     }
     p.lastCorrect = correct; p.lastDelta = delta; p.score += delta;
     conn.send({type:"answerAck"});
@@ -558,12 +558,13 @@ function endQuestion(){
     }catch(e){}
   });
 
-  // Give everyone ~10s to see the correct answer calmly, THEN show the scoreboard
+  // Give everyone ~5s to see the correct answer, then scoreboard (or winners on the last question)
   setTimeout(()=>{
-    show("hostReveal");
     const last = curQ+1 >= quiz.length;
-    $("revealTitle").textContent = last ? "Final standings" : "Scoreboard";
-    // Top 5 with up/down movement, appearing one by one
+    if(last){ endGame(); return; }   // last question: skip the ranking, go straight to the winners
+    show("hostReveal");
+    $("revealTitle").textContent = "Scoreboard";
+    // Top 5 with up/down movement, appearing one by one (host screen only)
     $("revealLb").innerHTML = ranked.slice(0,5).map((p,i)=>{
       const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
       const dir = p.prevRank === 0 ? "new" : move > 0 ? "up" : move < 0 ? "down" : "same";
@@ -574,14 +575,13 @@ function endQuestion(){
         <span>${i+1}. ${dn(p)} <span class="move ${dir}">${badge}</span></span>
         <span class="pts">${p.score}</span></div>`;
     }).join("") || `<div class="item"><span>No players</span><span></span></div>`;
-    $("nextBtn").textContent = last ? "See winners 🏆" : "Skip →";
-    // Tell each player their position + points + movement (synced with the TV scoreboard)
+    $("nextBtn").textContent = "Skip →";
+    // Each player sees ONLY their own points on their device (no rank/position)
     Object.values(conns).forEach(p => {
-      const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
-      try{ p.conn.send({type:"standings", rank:p.rank, score:p.score, total:ranked.length, move}); }catch(e){}
+      try{ p.conn.send({type:"standings", score:p.score}); }catch(e){}
     });
-    startRevealCountdown(last);
-  }, 10000);
+    startRevealCountdown(false);
+  }, 5000);
 }
 
 $("nextBtn").onclick = () => advanceFromReveal(curQ+1 >= quiz.length);
@@ -798,11 +798,10 @@ function showPlayerReveal(d){
 }
 function showPlayerStandings(d){
   show("playerFeedback");
-  $("pfIcon").textContent = placeIcon(d.rank);
-  $("pfText").textContent = ordinal(d.rank) + " place";
+  $("pfIcon").textContent = "⭐";
+  $("pfText").textContent = "Your score";
   $("pfScore").textContent = d.score + " pts";
-  const mv = d.move > 0 ? `▲ Up ${d.move}!` : d.move < 0 ? `▼ Down ${-d.move}` : "Holding steady";
-  $("pfRank").textContent = `${mv} • ${d.total} player${d.total===1?"":"s"}`;
+  $("pfRank").textContent = "";
   $("pfText").classList.remove("pop-in"); void $("pfText").offsetWidth; $("pfText").classList.add("pop-in");
 }
 
