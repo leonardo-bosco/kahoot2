@@ -576,9 +576,10 @@ function endQuestion(){
         <span class="pts">${p.score}</span></div>`;
     }).join("") || `<div class="item"><span>No players</span><span></span></div>`;
     $("nextBtn").textContent = "Skip →";
-    // Each player sees ONLY their own points on their device (no rank/position)
+    // Each player sees their own score + position (normal questions only — the last one stays a surprise)
     Object.values(conns).forEach(p => {
-      try{ p.conn.send({type:"standings", score:p.score}); }catch(e){}
+      const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
+      try{ p.conn.send({type:"standings", rank:p.rank, score:p.score, total:ranked.length, move}); }catch(e){}
     });
     startRevealCountdown(false);
   }, 5000);
@@ -802,10 +803,11 @@ function showPlayerReveal(d){
 }
 function showPlayerStandings(d){
   show("playerFeedback");
-  $("pfIcon").textContent = "⭐";
-  $("pfText").textContent = "Your score";
+  $("pfIcon").textContent = placeIcon(d.rank);
+  $("pfText").textContent = ordinal(d.rank) + " place";
   $("pfScore").textContent = d.score + " pts";
-  $("pfRank").textContent = "";
+  const mv = d.move > 0 ? `▲ Up ${d.move}!` : d.move < 0 ? `▼ Down ${-d.move}` : "Holding steady";
+  $("pfRank").textContent = `${mv} • ${d.total} player${d.total===1?"":"s"}`;
   $("pfText").classList.remove("pop-in"); void $("pfText").offsetWidth; $("pfText").classList.add("pop-in");
 }
 
