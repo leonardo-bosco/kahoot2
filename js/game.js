@@ -554,7 +554,7 @@ function endQuestion(){
     }catch(e){}
   });
 
-  // Give everyone ~5s to see the correct answer, THEN show the scoreboard
+  // Give everyone ~10s to see the correct answer calmly, THEN show the scoreboard
   setTimeout(()=>{
     show("hostReveal");
     const last = curQ+1 >= quiz.length;
@@ -577,7 +577,7 @@ function endQuestion(){
       try{ p.conn.send({type:"standings", rank:p.rank, score:p.score, total:ranked.length, move}); }catch(e){}
     });
     startRevealCountdown(last);
-  }, 5000);
+  }, 10000);
 }
 
 $("nextBtn").onclick = () => advanceFromReveal(curQ+1 >= quiz.length);
@@ -731,13 +731,20 @@ function handleHostData(data){
       showPlayerStandings(data);
       break;
     case "gameOver":
-      $("pfIcon").textContent = data.rank===1 ? "🏆" : "🎉";
-      $("pfText").textContent = data.rank===1 ? "You won!" : `You finished #${data.rank} of ${data.total}`;
-      $("pfScore").textContent = data.score + " pts";
-      $("pfRank").textContent = "Thanks for playing!";
+      // Winner is revealed ONLY on the host screen — phones just build the hype
       Sound.stopTension(); Sound.stopLobby();
+      $("pfIcon").textContent = "🥁";
+      $("pfText").textContent = "Winners presentation!";
+      $("pfScore").textContent = "";
+      $("pfRank").textContent = "👀 Watch the main screen…";
       show("playerFeedback");
-      if(data.rank===1){ Sound.victory(); confetti(); }
+      Sound.startDrumroll(); Sound.accelerate(16, 9000);
+      setTimeout(() => {
+        Sound.stopDrumroll();
+        $("pfIcon").textContent = "🎉";
+        $("pfText").textContent = "Check the winners on the screen!";
+        $("pfRank").textContent = "Thanks for playing!";
+      }, 9500);
       break;
     case "kicked":
       $("pwTitle").textContent="Game ended"; $("pwMsg").textContent="The host closed the game.";
