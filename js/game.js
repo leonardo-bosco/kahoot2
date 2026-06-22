@@ -159,7 +159,11 @@ function renderQR(){
 }
 
 /* ---------------- Emoji picker ---------------- */
-const EMOJIS = ["😀","😎","🤩","🥳","🤖","👾","🐱","🐶","🦊","🐼","🦄","🐸","🦁","🐯","🐲","🍕"];
+const EMOJIS = [
+  "😀","😎","🤩","🥳","🤪","😜","🤓","🥸","🤠","😈",
+  "👻","💀","🤡","👽","👾","🤖","💩","🐱","🐶","🦊",
+  "🐼","🦄","🐸","🦁","🐯","🐵","🐧","🦖","🐙","🦈"
+];
 let selectedEmoji = EMOJIS[0];
 function renderEmojiPicker(){
   const wrap = $("emojiPicker"); if(!wrap) return;
