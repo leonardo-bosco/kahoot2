@@ -595,6 +595,8 @@ function broadcastEnd(){
 }
 function showFinal(){
   show("hostFinal");
+  $("finalTitle").textContent = "🥁 And the winners are…";
+  $("finalTitle").classList.remove("pop-in"); void $("finalTitle").offsetWidth; $("finalTitle").classList.add("pop-in");
   const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
   ranked.forEach((p,i)=>p.rank=i+1);
   recordHistory(ranked); renderHistory();
@@ -622,6 +624,8 @@ function showFinal(){
   setTimeout(() => reveal(2), 6000);
   setTimeout(() => {
     reveal(1);
+    $("finalTitle").textContent = "🏆 Winners!";
+    $("finalTitle").classList.remove("pop-in"); void $("finalTitle").offsetWidth; $("finalTitle").classList.add("pop-in");
     Sound.stopDrumroll();
     Sound.victory();
     confetti();
@@ -793,8 +797,8 @@ function showPlayerReveal(d){
     $("pfText").textContent = answeredThis ? "Wrong answer" : "Time's up!";
     Sound.wrong();
   }
-  $("pfScore").textContent = (d.delta>0 ? "+"+d.delta+" • " : "") + d.score + " pts";
-  $("pfRank").textContent = "Scores coming up…";
+  $("pfScore").textContent = d.delta > 0 ? "+" + d.delta + " points!" : "+0 points";
+  $("pfRank").textContent = "Total: " + d.score + " pts";
 }
 function showPlayerStandings(d){
   show("playerFeedback");
