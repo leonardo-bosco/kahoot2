@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Kahoot 2 — Quiz with Friends</title>
-<link rel="stylesheet" href="css/style.css?v=9" />
+<link rel="stylesheet" href="css/style.css?v=10" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -37,22 +37,29 @@
     <button id="hostBtn" class="btn purple">Host a new game</button>
     <p class="muted" style="text-align:center;margin-top:10px">You'll get a PIN to share with friends.</p>
   </div>
+  <div class="card" id="historyCard" style="display:none">
+    <div class="label" style="color:var(--ink)">🏆 Recent games</div>
+    <div id="historyList"></div>
+  </div>
 </div>
 
 <!-- ============ HOST: QUIZ SETUP ============ -->
 <div id="setup" class="screen hidden">
   <h1 class="logo" style="font-size:34px">Build your quiz</h1>
   <div class="card">
-    <div class="row" style="margin-bottom:14px">
-      <button id="useDefaultBtn" class="btn ghost small">Use sample quiz</button>
-      <button id="addQBtn" class="btn ghost small">+ Add question</button>
+    <input id="quizName" placeholder="Quiz name (for saving)" />
+    <div class="row" style="margin-top:12px">
+      <button id="useDefaultBtn" class="btn ghost small">Sample</button>
+      <button id="saveQuizBtn" class="btn ghost small">💾 Save quiz</button>
     </div>
-    <div id="qeditor" class="qeditor"></div>
+    <div id="savedQuizzes"></div>
+    <div id="qeditor" class="qeditor" style="margin-top:14px"></div>
     <div id="setupErr" class="err hidden" style="margin-top:14px"></div>
-    <div class="toolbar" style="margin-top:16px">
-      <button id="backHomeBtn" class="btn ghost">Back</button>
-      <button id="createGameBtn" class="btn green">Create game →</button>
-    </div>
+  </div>
+  <div class="setup-bar">
+    <button id="backHomeBtn" class="btn ghost">Back</button>
+    <button id="addQBtn" class="btn purple">+ Question</button>
+    <button id="createGameBtn" class="btn green">Create →</button>
   </div>
 </div>
 
@@ -131,6 +138,6 @@
   </div>
 </div>
 
-<script src="js/game.js?v=9"></script>
+<script src="js/game.js?v=10"></script>
 </body>
 </html>

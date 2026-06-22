@@ -237,11 +237,84 @@ function renderEditor(){
     el.onclick = e => { quiz.splice(+e.target.dataset.qi,1); if(!quiz.length) quiz.push(blankQ()); renderEditor(); });
 }
 
-$("hostBtn").onclick = () => { Sound.unlock(); if(!quiz.length) quiz=[blankQ()]; renderEditor(); show("setup"); };
-$("addQBtn").onclick = () => { quiz.push(blankQ()); renderEditor();
-  window.scrollTo(0, document.body.scrollHeight); };
+$("hostBtn").onclick = () => { Sound.unlock(); if(!quiz.length) quiz=[blankQ()]; renderEditor(); renderSavedQuizzes(); show("setup"); };
+$("addQBtn").onclick = () => {
+  quiz.push(blankQ()); renderEditor();
+  const blocks = $("qeditor").querySelectorAll(".qblock");
+  const last = blocks[blocks.length - 1];
+  if(last){
+    last.scrollIntoView({behavior:"smooth", block:"center"});
+    const ta = last.querySelector(".q-text"); if(ta) ta.focus();
+  }
+};
 $("useDefaultBtn").onclick = () => { quiz = SAMPLE.map(x => ({q:x.q, a:[...x.a], correct:x.correct})); renderEditor(); };
 $("backHomeBtn").onclick = () => show("home");
+
+/* ---------- Local "database" (saved quizzes + game history) ---------- */
+const LS_QUIZ = "kahoot2_quizzes", LS_HIST = "kahoot2_history";
+function loadLS(key){ try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; } }
+function saveLS(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+$("saveQuizBtn").onclick = () => {
+  const err = validateQuiz();
+  if(err){ $("setupErr").textContent = err; $("setupErr").classList.remove("hidden"); return; }
+  $("setupErr").classList.add("hidden");
+  const name = $("quizName").value.trim() || ("Quiz " + new Date().toLocaleDateString());
+  const quizzes = loadLS(LS_QUIZ);
+  quizzes.unshift({ name, questions: quiz.map(x=>({q:x.q, a:[...x.a], correct:x.correct})), savedAt: Date.now() });
+  saveLS(LS_QUIZ, quizzes.slice(0, 20));
+  $("quizName").value = name;
+  renderSavedQuizzes();
+  $("saveQuizBtn").textContent = "✅ Saved!";
+  setTimeout(() => { $("saveQuizBtn").textContent = "💾 Save quiz"; }, 1500);
+};
+
+function renderSavedQuizzes(){
+  const wrap = $("savedQuizzes"); if(!wrap) return;
+  const quizzes = loadLS(LS_QUIZ);
+  if(!quizzes.length){ wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `<div class="label" style="color:var(--ink);margin-top:12px">Saved quizzes</div>` +
+    quizzes.map((qz,i)=>`<div class="saved-row">
+      <span>${esc(qz.name)} <small>(${qz.questions.length} Q)</small></span>
+      <span><button class="btn ghost small load-qz" data-i="${i}">Load</button>
+      <button class="btn ghost small del-qz" data-i="${i}">🗑</button></span></div>`).join("");
+  wrap.querySelectorAll(".load-qz").forEach(b => b.onclick = () => {
+    const qz = loadLS(LS_QUIZ)[+b.dataset.i]; if(!qz) return;
+    quiz = qz.questions.map(x=>({q:x.q, a:[...x.a], correct:x.correct}));
+    $("quizName").value = qz.name;
+    renderEditor();
+    $("qeditor").scrollIntoView({behavior:"smooth", block:"start"});
+  });
+  wrap.querySelectorAll(".del-qz").forEach(b => b.onclick = () => {
+    const arr = loadLS(LS_QUIZ); arr.splice(+b.dataset.i, 1); saveLS(LS_QUIZ, arr); renderSavedQuizzes();
+  });
+}
+
+function recordHistory(ranked){
+  if(!ranked.length) return;
+  const w = ranked[0];
+  const hist = loadLS(LS_HIST);
+  hist.unshift({
+    date: Date.now(),
+    quizName: ($("quizName").value.trim()) || "Quiz",
+    winner: { emoji: w.emoji || "🏅", name: w.name, score: w.score },
+    players: ranked.length
+  });
+  saveLS(LS_HIST, hist.slice(0, 5));
+}
+function renderHistory(){
+  const hist = loadLS(LS_HIST), card = $("historyCard");
+  if(!card) return;
+  if(!hist.length){ card.style.display = "none"; return; }
+  card.style.display = "";
+  $("historyList").innerHTML = hist.map(h => {
+    const d = new Date(h.date);
+    const ds = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+    return `<div class="hist-row">
+      <span>${h.winner.emoji} <b>${esc(h.winner.name)}</b> <small>· ${esc(h.quizName)}</small></span>
+      <span class="muted">${h.winner.score} pts · ${h.players}p · ${ds}</span></div>`;
+  }).join("");
+}
 
 function validateQuiz(){
   if(!quiz.length) return "Add at least one question.";
@@ -520,6 +593,7 @@ function showFinal(){
   show("hostFinal");
   const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
   ranked.forEach((p,i)=>p.rank=i+1);
+  recordHistory(ranked); renderHistory();
   const medal = {1:"🥇",2:"🥈",3:"🥉"};
   const byRank = r => ranked[r-1];
   const podHtml = rank => {
@@ -730,4 +804,5 @@ window.addEventListener("beforeunload", () => {
 /* ---------------- Boot ---------------- */
 renderEmojiPicker();
 renderQR();
+renderHistory();
 show("home");

@@ -158,6 +158,23 @@ button:disabled{opacity:.5; cursor:not-allowed;}
 .ansrow .pick{width:auto; padding:0; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; white-space:nowrap;}
 .err{background:#ffe0e0; color:#a00; padding:10px 14px; border-radius:10px; font-weight:700; width:100%; text-align:center;}
 .toolbar{display:flex; gap:10px; width:100%;}
+/* Sticky action bar in the quiz editor */
+#setup{padding-bottom:92px;}
+.setup-bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:40; max-width:760px; margin:0 auto;
+  display:flex; gap:8px; padding:10px 14px;
+  background:rgba(40,12,80,.94); backdrop-filter:blur(6px);
+}
+.setup-bar .btn{padding:14px 8px; font-size:15px;}
+/* Saved quizzes + history rows */
+.saved-row,.hist-row{
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  background:#f4f4fb; border-radius:8px; padding:9px 12px; margin-top:6px;
+  font-size:14px; color:var(--ink);
+}
+.saved-row small,.hist-row small{color:#777;}
+.hist-row b{color:var(--bg1);}
+.saved-row .btn.small{padding:6px 10px;}
 a.link{color:#fff; text-decoration:underline; cursor:pointer; font-size:14px;}
 .status{color:#e9d8ff; font-size:13px; min-height:18px; text-align:center;}
 
