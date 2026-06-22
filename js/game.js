@@ -9,6 +9,8 @@ const PREFIX = "kahoot2game-";
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function makePin(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function dn(p){ return (p.emoji ? p.emoji + " " : "") + esc(p.name); }
+function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n + (s[(v-20)%10] || s[v] || s[0]); }
+function placeIcon(rank){ return rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"🏅"; }
 
 /* ---------------- Default quiz ---------------- */
 const SAMPLE = [
@@ -369,7 +371,7 @@ function handlePlayerData(conn, data){
     const name = (data.name||"Player").toString().slice(0,16).trim() || "Player";
     const emoji = (data.emoji||"😀").toString().slice(0,4);
     if(curQ >= 0){ conn.send({type:"joinDenied", reason:"Game already started."}); return; }
-    conns[conn.peer] = {conn, name, emoji, score:0, answered:false, lastDelta:0, lastCorrect:false, rank:0};
+    conns[conn.peer] = {conn, name, emoji, score:0, answered:false, lastDelta:0, lastCorrect:false, rank:0, prevRank:0};
     conn.send({type:"joined", name, emoji});
     updateLobby();
   }
@@ -466,7 +468,8 @@ function endQuestion(){
     el.classList.toggle("dim", i!==q.correct);
   });
 
-  // rank players
+  // capture previous ranks, then re-rank by score
+  Object.values(conns).forEach(p => { p.prevRank = p.rank; });
   const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
   ranked.forEach((p,i)=>p.rank=i+1);
 
@@ -478,17 +481,30 @@ function endQuestion(){
     }catch(e){}
   });
 
-  // host leaderboard
+  // Give everyone ~5s to see the correct answer, THEN show the scoreboard
   setTimeout(()=>{
     show("hostReveal");
     const last = curQ+1 >= quiz.length;
     $("revealTitle").textContent = last ? "Final standings" : "Scoreboard";
-    $("revealLb").innerHTML = ranked.slice(0,8).map((p,i)=>
-      `<div class="item"><span>${i+1}. ${dn(p)}</span><span class="pts">${p.score}</span></div>`).join("")
-      || `<div class="item"><span>No players</span><span></span></div>`;
+    // Top 5 with up/down movement, appearing one by one
+    $("revealLb").innerHTML = ranked.slice(0,5).map((p,i)=>{
+      const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
+      const dir = p.prevRank === 0 ? "new" : move > 0 ? "up" : move < 0 ? "down" : "same";
+      const badge = dir === "new" ? "NEW"
+        : dir === "up" ? `▲ ${move}`
+        : dir === "down" ? `▼ ${-move}` : "—";
+      return `<div class="item ${dir}" style="animation-delay:${(i*0.18).toFixed(2)}s">
+        <span>${i+1}. ${dn(p)} <span class="move ${dir}">${badge}</span></span>
+        <span class="pts">${p.score}</span></div>`;
+    }).join("") || `<div class="item"><span>No players</span><span></span></div>`;
     $("nextBtn").textContent = last ? "See winners 🏆" : "Skip →";
+    // Tell each player their position + points + movement (synced with the TV scoreboard)
+    Object.values(conns).forEach(p => {
+      const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
+      try{ p.conn.send({type:"standings", rank:p.rank, score:p.score, total:ranked.length, move}); }catch(e){}
+    });
     startRevealCountdown(last);
-  }, 1200);
+  }, 5000);
 }
 
 $("nextBtn").onclick = () => advanceFromReveal(curQ+1 >= quiz.length);
@@ -637,6 +653,9 @@ function handleHostData(data){
     case "reveal":
       showPlayerReveal(data);
       break;
+    case "standings":
+      showPlayerStandings(data);
+      break;
     case "gameOver":
       $("pfIcon").textContent = data.rank===1 ? "🏆" : "🎉";
       $("pfText").textContent = data.rank===1 ? "You won!" : `You finished #${data.rank} of ${data.total}`;
@@ -690,7 +709,16 @@ function showPlayerReveal(d){
     Sound.wrong();
   }
   $("pfScore").textContent = (d.delta>0 ? "+"+d.delta+" • " : "") + d.score + " pts";
-  $("pfRank").textContent = `Rank ${d.rank} of ${d.total}`;
+  $("pfRank").textContent = "Scores coming up…";
+}
+function showPlayerStandings(d){
+  show("playerFeedback");
+  $("pfIcon").textContent = placeIcon(d.rank);
+  $("pfText").textContent = ordinal(d.rank) + " place";
+  $("pfScore").textContent = d.score + " pts";
+  const mv = d.move > 0 ? `▲ Up ${d.move}!` : d.move < 0 ? `▼ Down ${-d.move}` : "Holding steady";
+  $("pfRank").textContent = `${mv} • ${d.total} player${d.total===1?"":"s"}`;
+  $("pfText").classList.remove("pop-in"); void $("pfText").offsetWidth; $("pfText").classList.add("pop-in");
 }
 
 /* safety: clean up on unload */
