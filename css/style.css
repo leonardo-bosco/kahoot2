@@ -201,6 +201,36 @@ button:disabled{opacity:.5; cursor:not-allowed;}
 a.link{color:#fff; text-decoration:underline; cursor:pointer; font-size:14px;}
 .status{color:#e9d8ff; font-size:13px; min-height:18px; text-align:center;}
 
+/* ===== Responsive question layout: use width (not height) for long questions ===== */
+#hostQuestion{
+  max-width:min(1180px, 96vw);
+  margin:0 auto;
+  min-height:calc(100vh - 32px);
+  justify-content:space-between;
+}
+#hostQuestion .qtext{
+  flex:1 1 auto; width:100%;
+  max-height:54vh; overflow:auto;
+  font-size:clamp(20px, 3.2vw, 40px); line-height:1.25;
+}
+#hostQuestion .answers{flex:0 0 auto;}
+#playerAnswer .qtext{max-height:40vh; overflow:auto;}
+
+@media (min-width:1000px){              /* desktop / monitor */
+  #hostQuestion .answers{gap:16px;}
+  #hostQuestion .ans{min-height:96px; font-size:clamp(18px,1.7vw,26px);}
+}
+@media (min-width:1500px){              /* big monitor / TV */
+  #hostQuestion{max-width:1320px;}
+  #hostQuestion .qtext{font-size:clamp(28px,2.3vw,46px); max-height:50vh;}
+  #hostQuestion .ans{min-height:110px; font-size:28px;}
+}
+@media (max-width:520px){               /* phones */
+  #hostQuestion .answers{grid-template-columns:1fr;}  /* stack answers so each is readable */
+  #hostQuestion .qtext{font-size:clamp(18px,5vw,26px); max-height:46vh;}
+  .ans{min-height:60px; padding:14px;}
+}
+
 /* Confetti */
 .confetti{
   position:fixed; top:-24px; width:11px; height:15px; z-index:9999;

@@ -1,10 +1,11 @@
-# Kahoot 2 🎮
+# Kahoot Vault 🎮
 
 A live, multiplayer quiz game in the style of Kahoot — built with **vanilla
-JavaScript (ES Modules)**, **WebRTC (PeerJS)** and the **Web Audio API**.
+JavaScript**, **WebRTC (PeerJS)** and the **Web Audio API**. No frameworks, no
+build step.
 
 - 🌐 **No backend, no build step.** The host's browser *is* the server; players
-  connect peer-to-peer with a 6-digit PIN.
+  connect peer-to-peer with a 6-digit PIN (or by scanning the lobby QR code).
 - 🎵 **Procedural music & sound effects** synthesized at runtime — no audio files.
 - ✨ **Animations** for question reveals, answer tiles and an animated countdown
   ring that turns red and pulses in the final seconds.
@@ -15,26 +16,36 @@ JavaScript (ES Modules)**, **WebRTC (PeerJS)** and the **Web Audio API**.
 1. One person clicks **Host a new game**, builds a quiz (or loads the sample),
    and clicks **Create game** to get a PIN.
 2. Everyone else opens the same site, enters the **PIN** and a nickname, and
-   taps **Join game**.
+   taps **Join game** (or scans the QR shown in the host lobby).
 3. The host clicks **Start game**. Answer fast — quicker correct answers score
    more points. A scoreboard shows after each question and a podium at the end.
 
 ## Running locally
 
-ES Modules don't load from `file://`, so serve the folder over HTTP. Any static
-server works:
+There is **no build step and nothing to install** — the scripts load as plain
+`<script>` tags (PeerJS and the QR library come from a CDN, so you need an
+internet connection).
+
+**Recommended — VS Code "Live Server":** right-click `index.html` →
+**"Open with Live Server"**. This serves the game over `http://localhost:…`,
+which is what you want: the lobby QR code encodes the page URL, so it only works
+for phones when the page is served over HTTP (not opened as a `file://` path).
+
+Any other static server works too, e.g.:
 
 ```bash
-# Option A — npm (uses npx, nothing to install globally)
-npm run dev
-
-# Option B — Python
+# Python (if installed)
 python -m http.server 8000
 
-# Option C — VS Code "Live Server" extension: right-click index.html → "Open with Live Server"
+# Node (if installed)
+npx serve .
 ```
 
 Then open the printed `http://localhost:…` URL.
+
+> **Just want to preview the UI on one machine?** You can open `index.html`
+> directly in a browser (`file://`) — the screens and styling render fine. Only
+> the cross-device join (QR / phones) needs an HTTP server.
 
 ## Deploying to GitHub Pages
 
@@ -55,54 +66,26 @@ This is a static site, so deployment is just pushing and enabling Pages:
 
 ```
 .
-├── index.html              # Markup only: screens + script/style includes
-├── package.json            # Metadata + a "dev" server script
+├── index.html      # All the screens (markup) + script/style includes
+├── css/
+│   └── style.css   # All styling: layout, game components, editor, animations
+├── js/
+│   └── game.js     # All game logic: quiz editor, host/player networking,
+│                   #   scoring, audio engine and DOM rendering
 ├── README.md
-├── LICENSE
-└── src/
-    ├── main.js             # Entry point: wires modules and navigation
-    ├── core/
-    │   ├── config.js       # Constants & tunables (timing, scoring, colors)
-    │   ├── utils.js        # DOM/string helpers
-    │   └── sampleQuiz.js   # Built-in sample quiz
-    ├── audio/
-    │   └── soundEngine.js  # Web Audio synthesizer (music + SFX)
-    ├── net/
-    │   ├── protocol.js     # Message types shared by host & player
-    │   ├── hostGame.js     # Host controller (PeerJS server side)
-    │   └── playerGame.js   # Player controller (PeerJS client side)
-    └── ui/
-        ├── screens.js      # Screen router (show/hide)
-        ├── quizEditor.js   # Quiz model + editor form
-        ├── hostView.js     # Host DOM rendering
-        └── playerView.js   # Player DOM rendering
-    └── styles/
-        ├── base.css        # Tokens, reset, layout, buttons, forms
-        ├── components.css  # Game components (timer, answers, podium…)
-        ├── editor.css      # Quiz editor form
-        └── animations.css  # Keyframes + animation classes
+└── LICENSE
 ```
-
-### Architecture notes
-
-- **Separation of concerns.** Networking (`net/`) never touches the DOM
-  directly — it calls into `ui/` render functions. Rendering modules never
-  contain game logic. This keeps the game loop readable and the visuals easy
-  to restyle.
-- **Single source of truth for the protocol.** Both sides import message names
-  from `net/protocol.js`, so the host and player can't drift out of sync.
-- **No magic numbers.** Timing, scoring and layout constants live in
-  `core/config.js`.
 
 ## Tech stack
 
-| Concern        | Choice                                  |
-| -------------- | --------------------------------------- |
-| Language       | Vanilla JavaScript (ES Modules)         |
-| Networking     | [PeerJS](https://peerjs.com/) (WebRTC)  |
-| Audio          | Web Audio API (procedural synthesis)    |
-| Styling        | Plain CSS, split by responsibility      |
-| Hosting        | Static (GitHub Pages compatible)        |
+| Concern        | Choice                                   |
+| -------------- | ---------------------------------------- |
+| Language       | Vanilla JavaScript (no build step)       |
+| Networking     | [PeerJS](https://peerjs.com/) (WebRTC)   |
+| QR code        | qrcodejs (CDN)                           |
+| Audio          | Web Audio API (procedural synthesis)     |
+| Styling        | Plain CSS                                |
+| Hosting        | Static (GitHub Pages compatible)         |
 
 ## License
 
