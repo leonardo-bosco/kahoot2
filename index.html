@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Kahoot 2 — Quiz with Friends</title>
-<link rel="stylesheet" href="css/style.css?v=15" />
+<link rel="stylesheet" href="css/style.css?v=16" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -109,6 +109,16 @@
   <button id="playAgainBtn" class="btn purple" style="max-width:320px;margin-top:10px">New game</button>
 </div>
 
+<!-- ============ GAME DETAILS / ANALYSIS ============ -->
+<div id="gameDetails" class="screen hidden">
+  <h1 class="logo" style="font-size:30px">📊 Game details</h1>
+  <div class="card" id="gdContent"></div>
+  <div class="toolbar" style="max-width:520px">
+    <button id="gdBackBtn" class="btn ghost">Back</button>
+    <button id="gdReplayBtn" class="btn green">🔁 Replay this quiz</button>
+  </div>
+</div>
+
 <!-- ============ PLAYER: WAITING ============ -->
 <div id="playerWait" class="screen hidden">
   <div class="center">
@@ -138,6 +148,6 @@
   </div>
 </div>
 
-<script src="js/game.js?v=15"></script>
+<script src="js/game.js?v=16"></script>
 </body>
 </html>

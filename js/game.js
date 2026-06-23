@@ -1,7 +1,7 @@
 "use strict";
 /* ---------------- Helpers ---------------- */
 const $ = id => document.getElementById(id);
-const screens = ["home","setup","lobby","hostQuestion","hostReveal","hostFinal","playerWait","playerAnswer","playerFeedback"];
+const screens = ["home","setup","lobby","hostQuestion","hostReveal","hostFinal","gameDetails","playerWait","playerAnswer","playerFeedback"];
 function show(id){ screens.forEach(s => $(s).classList.toggle("hidden", s !== id)); }
 const SHAPES = ["▲","◆","●","■"];
 const NAMES = ["c0","c1","c2","c3"];
@@ -302,7 +302,10 @@ function recordHistory(ranked){
     date: Date.now(),
     quizName: ($("quizName").value.trim()) || "Quiz",
     winner: { emoji: w.emoji || "🏅", name: w.name, score: w.score },
-    players: ranked.length
+    players: ranked.length,
+    quiz: quiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct })),
+    standings: ranked.map(p => ({ emoji:p.emoji, name:p.name, score:p.score, rank:p.rank })),
+    rounds: matchLog.map(r => ({ ...r }))
   });
   saveLS(LS_HIST, hist.slice(0, 5));
 }
@@ -311,14 +314,87 @@ function renderHistory(){
   if(!card) return;
   if(!hist.length){ card.style.display = "none"; return; }
   card.style.display = "";
-  $("historyList").innerHTML = hist.map(h => {
+  $("historyList").innerHTML = hist.map((h,i) => {
     const d = new Date(h.date);
     const ds = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-    return `<div class="hist-row">
+    return `<div class="hist-row clickable" data-i="${i}">
       <span>${h.winner.emoji} <b>${esc(h.winner.name)}</b> <small>· ${esc(h.quizName)}</small></span>
-      <span class="muted">${h.winner.score} pts · ${h.players}p · ${ds}</span></div>`;
+      <span class="muted">${h.winner.score} pts · ${h.players}p · ${ds} ›</span></div>`;
   }).join("");
+  $("historyList").querySelectorAll(".hist-row").forEach(row =>
+    row.onclick = () => openGameDetails(+row.dataset.i));
 }
+
+/* ---------- Game details / analysis screen ---------- */
+let gdReplayQuiz = null, gdReplayName = "";
+function openGameDetails(i){
+  const h = loadLS(LS_HIST)[i];
+  if(!h) return;
+  gdReplayQuiz = (h.quiz && h.quiz.length) ? h.quiz : null;
+  gdReplayName = h.quizName || "";
+  const d = new Date(h.date);
+  const ds = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+
+  let html = `<div class="gd-head">
+    <div><b>${esc(h.quizName||"Quiz")}</b><div class="muted">${ds} · ${h.players} players</div></div>
+    <div style="text-align:right">${h.winner.emoji} <b>${esc(h.winner.name)}</b><div class="muted">${h.winner.score} pts</div></div>
+  </div>`;
+
+  if(h.standings && h.standings.length){
+    html += `<div class="label" style="color:var(--ink);margin-top:14px">Final standings</div>`;
+    html += h.standings.map(s =>
+      `<div class="saved-row"><span>${s.rank}. ${s.emoji||""} ${esc(s.name)}</span><span class="pts">${s.score} pts</span></div>`).join("");
+  }
+
+  if(h.rounds && h.rounds.length){
+    html += `<div class="label" style="color:var(--ink);margin-top:16px">Per-question analysis</div>`;
+    html += h.rounds.map((r,qi) => {
+      const total = r.players.length;
+      const right = r.players.filter(p => p.correct).length;
+      const pct = total ? Math.round(right/total*100) : 0;
+      const opts = r.answers.map((a,ai) => {
+        const c = (r.counts && r.counts[ai]) || 0;
+        const w = total ? Math.round(c/total*100) : 0;
+        const isC = ai === r.correct;
+        return `<div class="opt-bar ${isC?'correct':''}">
+          <span class="opt-lbl">${SHAPES[ai]} ${esc(a)} ${isC?'✓':''}</span>
+          <span class="bar ${NAMES[ai]}" style="width:${Math.max(6,w)}%"></span>
+          <span class="opt-cnt">${c}</span></div>`;
+      }).join("");
+      const rightN = r.players.filter(p=>p.correct).map(p=>`${p.emoji||""} ${esc(p.name)}`).join(", ") || "—";
+      const wrongN = r.players.filter(p=>!p.correct).map(p=>`${p.emoji||""} ${esc(p.name)}`).join(", ") || "—";
+      return `<div class="gd-q">
+        <h4>Q${qi+1}. ${esc(r.question)}</h4>
+        <div class="pie-wrap">
+          <div class="pie" style="background:conic-gradient(var(--green) 0 ${pct}%, var(--red) ${pct}% 100%)">
+            <span>${pct}%</span>
+          </div>
+          <div class="legend">
+            <div><span class="g">●</span> ${right} acertaram</div>
+            <div><span class="r">●</span> ${total-right} erraram</div>
+          </div>
+        </div>
+        ${opts}
+        <div class="namelist ok">✅ ${rightN}</div>
+        <div class="namelist no">❌ ${wrongN}</div>
+      </div>`;
+    }).join("");
+  } else {
+    html += `<p class="muted" style="margin-top:12px">No per-question data for this game (older game).</p>`;
+  }
+
+  $("gdContent").innerHTML = html;
+  $("gdReplayBtn").style.display = gdReplayQuiz ? "" : "none";
+  show("gameDetails");
+}
+$("gdBackBtn").onclick = () => show("home");
+$("gdReplayBtn").onclick = () => {
+  if(!gdReplayQuiz) return;
+  quiz = gdReplayQuiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct }));
+  $("quizName").value = gdReplayName;
+  renderEditor(); renderSavedQuizzes();
+  show("setup");
+};
 
 function validateQuiz(){
   if(!quiz.length) return "Add at least one question.";
@@ -342,6 +418,7 @@ let curQ = -1;
 let qStart = 0;
 let timerInt = null;
 let qLive = false;
+let matchLog = [];          // per-question results for post-game analysis
 const QTIME = 30;           // seconds per question
 const RING_C = 2 * Math.PI * 32; // circumference of timer ring (r=32)
 
@@ -408,7 +485,7 @@ $("createGameBtn").onclick = () => {
 
 function startHosting(){
   pin = makePin();
-  conns = {}; curQ = -1;
+  conns = {}; curQ = -1; matchLog = [];
   show("lobby");
   $("pinBox").textContent = pin;
   $("lobbyStatus").textContent = "Connecting…";
@@ -458,6 +535,7 @@ function handlePlayerData(conn, data){
     const q = quiz[curQ];
     if(typeof data.choice !== "number" || data.choice < 0 || data.choice >= q.a.length) return;
     p.answered = true;
+    p.lastChoice = data.choice;
     const elapsed = (Date.now() - qStart) / 1000;
     const correct = data.choice === q.correct;
     let delta = 0;
@@ -538,6 +616,16 @@ function endQuestion(){
   qLive = false;
   Sound.stopTension();
   const q = quiz[curQ];
+
+  // record this question's results (who chose what) for post-game analysis
+  const counts = q.a.map(() => 0);
+  const playersRec = Object.values(conns).map(p => {
+    const answered = !!p.answered;
+    const choice = answered ? p.lastChoice : null;
+    if(answered && choice != null && choice >= 0 && choice < counts.length) counts[choice]++;
+    return { name: p.name, emoji: p.emoji, choice, correct: answered ? !!p.lastCorrect : false };
+  });
+  matchLog.push({ question: q.q, answers: q.a.slice(), correct: q.correct, counts, players: playersRec });
 
   // highlight correct on host
   document.querySelectorAll("#hqAnswers .ans").forEach((el,i)=>{
