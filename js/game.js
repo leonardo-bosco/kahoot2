@@ -307,7 +307,7 @@ function recordHistory(ranked){
     standings: ranked.map(p => ({ emoji:p.emoji, name:p.name, score:p.score, rank:p.rank })),
     rounds: matchLog.map(r => ({ ...r }))
   });
-  saveLS(LS_HIST, hist.slice(0, 5));
+  saveLS(LS_HIST, hist.slice(0, 10));
 }
 function renderHistory(){
   const hist = loadLS(LS_HIST), card = $("historyCard");
@@ -326,10 +326,11 @@ function renderHistory(){
 }
 
 /* ---------- Game details / analysis screen ---------- */
-let gdReplayQuiz = null, gdReplayName = "";
+let gdReplayQuiz = null, gdReplayName = "", gdCurrent = null;
 function openGameDetails(i){
   const h = loadLS(LS_HIST)[i];
   if(!h) return;
+  gdCurrent = h;
   gdReplayQuiz = (h.quiz && h.quiz.length) ? h.quiz : null;
   gdReplayName = h.quizName || "";
   const d = new Date(h.date);
@@ -395,6 +396,45 @@ $("gdReplayBtn").onclick = () => {
   renderEditor(); renderSavedQuizzes();
   show("setup");
 };
+$("gdExportBtn").onclick = () => { if(gdCurrent) exportGameCSV(gdCurrent); };
+
+function csvCell(v){ return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }
+function exportGameCSV(h){
+  const rows = [];
+  rows.push(["Kahoot Vault — Game Analysis"]);
+  rows.push(["Quiz", h.quizName || "Quiz"]);
+  rows.push(["Date", new Date(h.date).toLocaleString()]);
+  rows.push(["Players", h.players]);
+  rows.push(["Winner", `${h.winner.name} (${h.winner.score} pts)`]);
+  rows.push([]);
+  if(h.standings && h.standings.length){
+    rows.push(["Final standings"]);
+    rows.push(["Rank", "Player", "Score"]);
+    h.standings.forEach(s => rows.push([s.rank, s.name, s.score]));
+    rows.push([]);
+  }
+  if(h.rounds && h.rounds.length){
+    rows.push(["Per-question results"]);
+    rows.push(["Q#", "Question", "Correct answer", "Player", "Player answer", "Result"]);
+    h.rounds.forEach((r, qi) => {
+      const correctAns = r.answers[r.correct] != null ? r.answers[r.correct] : "";
+      r.players.forEach(p => {
+        const chosen = (p.choice != null && r.answers[p.choice] != null) ? r.answers[p.choice] : "(no answer)";
+        const result = p.correct ? "Correct" : (p.choice == null ? "No answer" : "Wrong");
+        rows.push([qi+1, r.question, correctAns, p.name, chosen, result]);
+      });
+    });
+  }
+  const csv = rows.map(r => r.map(csvCell).join(",")).join("\r\n");
+  const BOM = String.fromCharCode(0xFEFF); // helps Excel read UTF-8 accents
+  const blob = new Blob([BOM + csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "kahoot-vault-" + new Date(h.date).toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 
 function validateQuiz(){
   if(!quiz.length) return "Add at least one question.";
@@ -525,6 +565,7 @@ function handlePlayerData(conn, data){
     const name = (data.name||"Player").toString().slice(0,16).trim() || "Player";
     const emoji = (data.emoji||"😀").toString().slice(0,4);
     if(curQ >= 0){ conn.send({type:"joinDenied", reason:"Game already started."}); return; }
+    if(Object.keys(conns).length >= EMOJIS.length){ conn.send({type:"joinDenied", reason:"Game is full (max " + EMOJIS.length + " players)."}); return; }
     conns[conn.peer] = {conn, name, emoji, score:0, answered:false, lastDelta:0, lastCorrect:false, rank:0, prevRank:0};
     conn.send({type:"joined", name, emoji});
     updateLobby();

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Kahoot 2 — Quiz with Friends</title>
-<link rel="stylesheet" href="css/style.css?v=16" />
+<title>Kahoot Vault — Quiz with Friends</title>
+<link rel="stylesheet" href="css/style.css?v=17" />
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -22,7 +22,7 @@
 
 <!-- ============ HOME ============ -->
 <div id="home" class="screen">
-  <h1 class="logo">Kahoot&nbsp;2</h1>
+  <h1 class="logo">Kahoot&nbsp;Vault</h1>
   <p class="sub">Play live quizzes with your friends — anywhere in the world.</p>
   <div class="card">
     <div class="label" style="color:var(--ink)">Have a game PIN?</div>
@@ -115,7 +115,8 @@
   <div class="card" id="gdContent"></div>
   <div class="toolbar" style="max-width:520px">
     <button id="gdBackBtn" class="btn ghost">Back</button>
-    <button id="gdReplayBtn" class="btn green">🔁 Replay this quiz</button>
+    <button id="gdExportBtn" class="btn primary">⬇ Export CSV</button>
+    <button id="gdReplayBtn" class="btn green">🔁 Replay</button>
   </div>
 </div>
 
@@ -148,6 +149,6 @@
   </div>
 </div>
 
-<script src="js/game.js?v=16"></script>
+<script src="js/game.js?v=17"></script>
 </body>
 </html>
