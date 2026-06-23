@@ -199,7 +199,7 @@ $("soundBtn").onclick = () => {
    QUIZ EDITOR (host setup)
 =========================================================== */
 let quiz = [];
-function blankQ(){ return {q:"", a:["","","",""], correct:0}; }
+function blankQ(){ return {q:"", a:["","","",""], correct:0, time:30}; }
 
 function renderEditor(){
   const wrap = $("qeditor"); wrap.innerHTML = "";
@@ -219,8 +219,10 @@ function renderEditor(){
         </div>`;
     }
     block.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <strong>Question ${qi+1}</strong>
+        <span class="q-time-wrap">⏱ <input type="number" class="q-time" data-qi="${qi}"
+              value="${item.time||30}" min="5" max="120" /> s</span>
         <button class="btn ghost small del-q" data-qi="${qi}">Remove</button>
       </div>
       <textarea class="q-text" data-qi="${qi}" placeholder="Type your question…">${esc(item.q)}</textarea>
@@ -237,6 +239,8 @@ function renderEditor(){
     el.oninput = e => quiz[+e.target.dataset.qi].a[+e.target.dataset.ai] = e.target.value);
   wrap.querySelectorAll('input[type=radio]').forEach(el =>
     el.onchange = e => quiz[+e.target.dataset.qi].correct = +e.target.dataset.ai);
+  wrap.querySelectorAll(".q-time").forEach(el =>
+    el.oninput = e => quiz[+e.target.dataset.qi].time = e.target.value);
   wrap.querySelectorAll(".del-q").forEach(el =>
     el.onclick = e => { quiz.splice(+e.target.dataset.qi,1); if(!quiz.length) quiz.push(blankQ()); renderEditor(); });
 }
@@ -251,7 +255,7 @@ $("addQBtn").onclick = () => {
     const ta = last.querySelector(".q-text"); if(ta) ta.focus();
   }
 };
-$("useDefaultBtn").onclick = () => { quiz = SAMPLE.map(x => ({q:x.q, a:[...x.a], correct:x.correct})); renderEditor(); };
+$("useDefaultBtn").onclick = () => { quiz = SAMPLE.map(x => ({q:x.q, a:[...x.a], correct:x.correct, time:30})); renderEditor(); };
 $("backHomeBtn").onclick = () => show("home");
 
 /* ---------- Local "database" (saved quizzes + game history) ---------- */
@@ -265,7 +269,7 @@ $("saveQuizBtn").onclick = () => {
   $("setupErr").classList.add("hidden");
   const name = $("quizName").value.trim() || ("Quiz " + new Date().toLocaleDateString());
   const quizzes = loadLS(LS_QUIZ);
-  quizzes.unshift({ name, questions: quiz.map(x=>({q:x.q, a:[...x.a], correct:x.correct})), savedAt: Date.now() });
+  quizzes.unshift({ name, questions: quiz.map(x=>({q:x.q, a:[...x.a], correct:x.correct, time:x.time||30})), savedAt: Date.now() });
   saveLS(LS_QUIZ, quizzes.slice(0, 20));
   $("quizName").value = name;
   renderSavedQuizzes();
@@ -284,7 +288,7 @@ function renderSavedQuizzes(){
       <button class="btn ghost small del-qz" data-i="${i}">🗑</button></span></div>`).join("");
   wrap.querySelectorAll(".load-qz").forEach(b => b.onclick = () => {
     const qz = loadLS(LS_QUIZ)[+b.dataset.i]; if(!qz) return;
-    quiz = qz.questions.map(x=>({q:x.q, a:[...x.a], correct:x.correct}));
+    quiz = qz.questions.map(x=>({q:x.q, a:[...x.a], correct:x.correct, time:x.time||30}));
     $("quizName").value = qz.name;
     renderEditor();
     $("qeditor").scrollIntoView({behavior:"smooth", block:"start"});
@@ -303,7 +307,7 @@ function recordHistory(ranked){
     quizName: ($("quizName").value.trim()) || "Quiz",
     winner: { emoji: w.emoji || "🏅", name: w.name, score: w.score },
     players: ranked.length,
-    quiz: quiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct })),
+    quiz: quiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct, time:x.time||30 })),
     standings: ranked.map(p => ({ emoji:p.emoji, name:p.name, score:p.score, rank:p.rank })),
     rounds: matchLog.map(r => ({ ...r }))
   });
@@ -391,7 +395,7 @@ function openGameDetails(i){
 $("gdBackBtn").onclick = () => show("home");
 $("gdReplayBtn").onclick = () => {
   if(!gdReplayQuiz) return;
-  quiz = gdReplayQuiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct }));
+  quiz = gdReplayQuiz.map(x => ({ q:x.q, a:[...x.a], correct:x.correct, time:x.time||30 }));
   $("quizName").value = gdReplayName;
   renderEditor(); renderSavedQuizzes();
   show("setup");
@@ -459,7 +463,8 @@ let qStart = 0;
 let timerInt = null;
 let qLive = false;
 let matchLog = [];          // per-question results for post-game analysis
-const QTIME = 30;           // seconds per question
+let curQTime = 30;          // time (s) of the question currently in play
+const QTIME = 30;           // default seconds per question
 const RING_C = 2 * Math.PI * 32; // circumference of timer ring (r=32)
 
 function broadcast(msg){ Object.values(conns).forEach(p => { try{ p.conn.send(msg); }catch(e){} }); }
@@ -518,7 +523,8 @@ $("createGameBtn").onclick = () => {
     const correctText = it.a[it.correct];
     const a = pairs.map(p=>p.t.trim());
     const correct = Math.max(0, a.indexOf(correctText.trim()));
-    return {q:it.q.trim(), a, correct};
+    const time = Math.max(5, Math.min(120, parseInt(it.time) || 30));
+    return {q:it.q.trim(), a, correct, time};
   });
   startHosting();
 };
@@ -581,7 +587,7 @@ function handlePlayerData(conn, data){
     const correct = data.choice === q.correct;
     let delta = 0;
     if(correct){
-      const frac = Math.max(0, 1 - (elapsed / QTIME)); // 1 = instant, 0 = used all the time
+      const frac = Math.max(0, 1 - (elapsed / curQTime)); // 1 = instant, 0 = used all the time
       delta = Math.round(200 + 800 * frac);            // speed matters a lot: ~1000 fast, ~200 slow
     }
     p.lastCorrect = correct; p.lastDelta = delta; p.score += delta;
@@ -629,14 +635,16 @@ function nextQuestion(){
   $("hqAnswers").innerHTML = q.a.map((t,i)=>
     `<div class="ans ${NAMES[i]}"><span class="shape">${SHAPES[i]}</span>${esc(t)}</div>`).join("");
 
+  curQTime = Math.max(5, Math.min(120, parseInt(q.time) || 30));
+
   // players view
   broadcast({type:"question", index:curQ, total:quiz.length, question:q.q,
-             count:q.a.length, time:QTIME});
+             count:q.a.length, time:curQTime});
 
   qStart = Date.now();
   qLive = true;
   Sound.startTension();
-  let t = QTIME;
+  let t = curQTime;
   $("hqTimer").textContent = t;
   const ring = $("hqRing");
   if(ring){ ring.style.transition = "none"; ring.style.strokeDasharray = RING_C; ring.style.strokeDashoffset = "0"; }
@@ -646,7 +654,7 @@ function nextQuestion(){
   timerInt = setInterval(() => {
     t--;
     $("hqTimer").textContent = Math.max(0,t);
-    if(ring) ring.style.strokeDashoffset = (RING_C * (1 - t / QTIME)).toFixed(1);
+    if(ring) ring.style.strokeDashoffset = (RING_C * (1 - t / curQTime)).toFixed(1);
     if(t <= 0) endQuestion();
   }, 1000);
 }
