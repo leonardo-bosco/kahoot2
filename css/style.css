@@ -201,35 +201,45 @@ button:disabled{opacity:.5; cursor:not-allowed;}
 a.link{color:#fff; text-decoration:underline; cursor:pointer; font-size:14px;}
 .status{color:#e9d8ff; font-size:13px; min-height:18px; text-align:center;}
 
-/* ===== Responsive question layout: use width (not height) for long questions ===== */
+/* ===== Question screen (Kahoot-style): question on top, big horizontal answer bars ===== */
 #hostQuestion{
   max-width:min(1180px, 96vw);
   margin:0 auto;
   min-height:calc(100vh - 32px);
-  justify-content:space-between;
+  justify-content:flex-start;     /* question stays at the top */
+  gap:14px;
 }
 #hostQuestion .qtext{
-  flex:1 1 auto; width:100%;
-  max-height:54vh; overflow:auto;
-  font-size:clamp(20px, 3.2vw, 40px); line-height:1.25;
+  flex:0 0 auto;
+  max-height:38vh; overflow:auto;
+  font-size:clamp(20px, 3vw, 40px); line-height:1.25;
 }
-#hostQuestion .answers{flex:0 0 auto;}
-#playerAnswer .qtext{max-height:40vh; overflow:auto;}
+#hostQuestion .answers{
+  flex:1 1 auto;                  /* answers fill the remaining height */
+  grid-auto-rows:1fr;             /* bars stretch to equal, tall rows */
+  align-content:stretch;
+}
+#hostQuestion .ans{min-height:64px;}
 
-@media (min-width:1000px){              /* desktop / monitor */
-  #hostQuestion .answers{gap:16px;}
-  #hostQuestion .ans{min-height:96px; font-size:clamp(18px,1.7vw,26px);}
-}
-@media (min-width:1500px){              /* big monitor / TV */
+@media (min-width:1500px){        /* big monitor / TV */
   #hostQuestion{max-width:1320px;}
-  #hostQuestion .qtext{font-size:clamp(28px,2.3vw,46px); max-height:50vh;}
-  #hostQuestion .ans{min-height:110px; font-size:28px;}
+  #hostQuestion .qtext{font-size:clamp(28px,2.2vw,46px);}
+  #hostQuestion .ans{font-size:26px;}
 }
-@media (max-width:520px){               /* phones */
-  #hostQuestion .answers{grid-template-columns:1fr;}  /* stack answers so each is readable */
-  #hostQuestion .qtext{font-size:clamp(18px,5vw,26px); max-height:46vh;}
-  .ans{min-height:60px; padding:14px;}
+@media (max-width:560px){         /* phone hosting */
+  #hostQuestion .qtext{font-size:clamp(16px,4.4vw,22px); max-height:32vh;}
+  #hostQuestion .ans{font-size:14px; padding:12px; min-height:0;}
 }
+
+/* Player phone: no question text — just the answer buttons (with their text) */
+#paQuestion{display:none;}
+.tap{
+  display:flex; align-items:center; gap:12px;
+  justify-content:flex-start; text-align:left;
+  padding:14px 16px; min-height:0; font-size:20px;
+}
+.tap .tap-shape{font-size:30px; flex:0 0 auto;}
+.tap .tap-txt{font-weight:800; font-size:clamp(16px,4.6vw,24px); line-height:1.15;}
 
 /* Confetti */
 .confetti{

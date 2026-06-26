@@ -637,9 +637,9 @@ function nextQuestion(){
 
   curQTime = Math.max(5, Math.min(120, parseInt(q.time) || 30));
 
-  // players view
+  // players view (send the answer texts so phones can show them on the buttons)
   broadcast({type:"question", index:curQ, total:quiz.length, question:q.q,
-             count:q.a.length, time:curQTime});
+             answers:q.a, count:q.a.length, time:curQTime});
 
   qStart = Date.now();
   qLive = true;
@@ -905,12 +905,13 @@ function showPlayerQuestion(d){
   Sound.stopLobby(); Sound.startTension();
   $("paProgress").textContent = `Q${d.index+1} / ${d.total}`;
   $("paName").textContent = myEmoji + " " + myName;
-  $("paQuestion").textContent = d.question;
+  const ans = d.answers || [];
+  const n = d.count || ans.length;
   const grid = $("paGrid"); grid.innerHTML = "";
-  for(let i=0;i<d.count;i++){
+  for(let i=0;i<n;i++){
     const b = document.createElement("button");
     b.className = `tap ${NAMES[i]}`;
-    b.textContent = SHAPES[i];
+    b.innerHTML = `<span class="tap-shape">${SHAPES[i]}</span><span class="tap-txt">${esc(ans[i]||"")}</span>`;
     b.onclick = () => sendAnswer(i, b);
     grid.appendChild(b);
   }
