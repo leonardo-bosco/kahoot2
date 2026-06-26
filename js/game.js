@@ -11,6 +11,16 @@ function makePin(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function dn(p){ return (p.emoji ? p.emoji + " " : "") + esc(p.name); }
 function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n + (s[(v-20)%10] || s[v] || s[0]); }
 function placeIcon(rank){ return rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":"🏅"; }
+// Shrink the host question text until it fits its box (no scroll), for long questions
+function fitHostQuestion(){
+  const el = $("hqText");
+  el.style.fontSize = "";
+  let size = parseFloat(getComputedStyle(el).fontSize) || 28;
+  let guard = 0;
+  while(el.scrollHeight > el.clientHeight + 1 && size > 13 && guard < 80){
+    size -= 1.5; el.style.fontSize = size + "px"; guard++;
+  }
+}
 
 /* ---------------- Default quiz ---------------- */
 const SAMPLE = [
@@ -634,6 +644,7 @@ function nextQuestion(){
   updateAnsweredCount();
   $("hqAnswers").innerHTML = q.a.map((t,i)=>
     `<div class="ans ${NAMES[i]}"><span class="shape">${SHAPES[i]}</span>${esc(t)}</div>`).join("");
+  requestAnimationFrame(fitHostQuestion);   // auto-shrink long questions to fit
 
   curQTime = Math.max(5, Math.min(120, parseInt(q.time) || 30));
 
@@ -905,13 +916,12 @@ function showPlayerQuestion(d){
   Sound.stopLobby(); Sound.startTension();
   $("paProgress").textContent = `Q${d.index+1} / ${d.total}`;
   $("paName").textContent = myEmoji + " " + myName;
-  const ans = d.answers || [];
-  const n = d.count || ans.length;
+  const n = d.count || (d.answers ? d.answers.length : 4);
   const grid = $("paGrid"); grid.innerHTML = "";
   for(let i=0;i<n;i++){
     const b = document.createElement("button");
     b.className = `tap ${NAMES[i]}`;
-    b.innerHTML = `<span class="tap-shape">${SHAPES[i]}</span><span class="tap-txt">${esc(ans[i]||"")}</span>`;
+    b.textContent = SHAPES[i];   // phone shows only the colored shape — text stays on the TV
     b.onclick = () => sendAnswer(i, b);
     grid.appendChild(b);
   }
