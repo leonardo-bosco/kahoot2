@@ -49,7 +49,7 @@ const SAMPLE = [
 =========================================================== */
 // 🎵 Lobby music: paste a DIRECT link to an .mp3 here (or a file in this repo, e.g. "music/lobby.mp3").
 //    Leave empty ("") to use the built-in chiptune instead.
-const LOBBY_MUSIC_URL = "";
+const LOBBY_MUSIC_URL = "music/lobby.mp3";
 
 const Sound = (() => {
   let ctx = null, master = null, muted = false, lobbyTimer = null, step = 0;
