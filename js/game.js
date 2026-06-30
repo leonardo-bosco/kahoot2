@@ -821,6 +821,7 @@ $("joinBtn").onclick = joinGame;
 $("joinPin").addEventListener("keydown", e=>{ if(e.key==="Enter") $("joinName").focus(); });
 $("joinName").addEventListener("keydown", e=>{ if(e.key==="Enter") joinGame(); });
 
+let joinPinVal = "", joinTries = 0;
 function joinGame(){
   Sound.unlock();
   const p = $("joinPin").value.replace(/\D/g,"").slice(0,6);
@@ -828,23 +829,32 @@ function joinGame(){
   const status = $("joinStatus");
   if(p.length !== 6){ status.textContent = "Enter the 6-digit PIN."; return; }
   if(!n){ status.textContent = "Enter a nickname."; return; }
+  if(typeof Peer === "undefined"){ status.textContent = "Couldn't load the game engine — disable content blockers or try another browser."; return; }
   myName = n; myEmoji = selectedEmoji;
-  status.textContent = "Connecting…";
   $("joinBtn").disabled = true;
-
+  joinPinVal = p; joinTries = 0;
+  connectToHost();
+}
+// Safari/iOS often fails the first WebRTC attempt — retry automatically a few times
+function connectToHost(){
+  const p = joinPinVal, status = $("joinStatus");
+  status.textContent = joinTries === 0 ? "Connecting…" : "Reconnecting… (attempt " + (joinTries+1) + ")";
   if(myPeer){ try{ myPeer.destroy(); }catch(e){} }
   myPeer = new Peer(PEER_CONFIG);
 
-  let connected = false;
-  const giveUp = setTimeout(()=>{
-    if(!connected){ status.textContent = "Couldn't find that game. Check the PIN and try again.";
-      $("joinBtn").disabled=false; try{myPeer.destroy();}catch(e){} }
-  }, 20000);
+  let connected = false, settled = false;
+  const giveUp = setTimeout(() => {
+    if(connected || settled) return;
+    settled = true;
+    try{ myPeer.destroy(); }catch(e){}
+    if(joinTries < 2){ joinTries++; connectToHost(); }   // auto-retry
+    else { status.textContent = "Couldn't connect. On iPhone, try the Chrome app — or check your internet."; $("joinBtn").disabled = false; }
+  }, 11000);
 
   myPeer.on("open", () => {
     hostConn = myPeer.connect(PREFIX + p, {reliable:true});
     hostConn.on("open", () => {
-      connected = true; clearTimeout(giveUp);
+      connected = true; settled = true; clearTimeout(giveUp);
       hostConn.send({type:"join", name:myName, emoji:myEmoji});
     });
     hostConn.on("data", handleHostData);
@@ -855,10 +865,15 @@ function joinGame(){
   });
 
   myPeer.on("error", e => {
-    clearTimeout(giveUp);
-    if(e.type === "peer-unavailable"){ status.textContent = "No game found with that PIN."; }
-    else { status.textContent = "Connection error. Try again."; }
-    $("joinBtn").disabled = false;
+    if(e.type === "peer-unavailable"){
+      if(settled) return;
+      settled = true; clearTimeout(giveUp);
+      status.textContent = "No game found with that PIN.";
+      $("joinBtn").disabled = false;
+      try{ myPeer.destroy(); }catch(e){}
+      return;
+    }
+    // transient (network / server / webrtc) → let the timeout trigger an auto-retry
   });
 }
 
