@@ -6,6 +6,19 @@ function show(id){ screens.forEach(s => $(s).classList.toggle("hidden", s !== id
 const SHAPES = ["▲","◆","●","■"];
 const NAMES = ["c0","c1","c2","c3"];
 const PREFIX = "kahoot2game-";
+// STUN + free TURN so players on different networks (mobile data, strict NAT) can connect
+const PEER_CONFIG = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+    ]
+  }
+};
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function makePin(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function dn(p){ return (p.emoji ? p.emoji + " " : "") + esc(p.name); }
@@ -550,7 +563,7 @@ function startHosting(){
   Sound.unlock(); Sound.startLobby();
 
   if(peer){ try{ peer.destroy(); }catch(e){} }
-  peer = new Peer(PREFIX + pin, {debug:1});
+  peer = new Peer(PREFIX + pin, PEER_CONFIG);
 
   peer.on("open", () => { $("lobbyStatus").textContent = "Ready! Share the PIN above."; });
 
@@ -820,13 +833,13 @@ function joinGame(){
   $("joinBtn").disabled = true;
 
   if(myPeer){ try{ myPeer.destroy(); }catch(e){} }
-  myPeer = new Peer({debug:1});
+  myPeer = new Peer(PEER_CONFIG);
 
   let connected = false;
   const giveUp = setTimeout(()=>{
     if(!connected){ status.textContent = "Couldn't find that game. Check the PIN and try again.";
       $("joinBtn").disabled=false; try{myPeer.destroy();}catch(e){} }
-  }, 12000);
+  }, 20000);
 
   myPeer.on("open", () => {
     hostConn = myPeer.connect(PREFIX + p, {reliable:true});
