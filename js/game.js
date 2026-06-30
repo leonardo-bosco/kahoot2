@@ -478,8 +478,9 @@ function validateQuiz(){
 /* ===========================================================
    HOST GAME LOGIC (PeerJS)
 =========================================================== */
-let peer = null;            // PeerJS instance
-let conns = {};             // connId -> {conn, name, emoji, score, answered, lastDelta, rank}
+let gameRef = null;         // db.ref("games/"+pin) — this game's node in Firebase
+let answersUnsub = null;    // detaches the current question's answer listener
+let conns = {};             // pid -> {pid, name, emoji, score, answered, lastChoice, lastElapsed, lastCorrect, lastDelta, rank, prevRank}
 let pin = null;
 let curQ = -1;
 let qStart = 0;
@@ -490,7 +491,8 @@ let curQTime = 30;          // time (s) of the question currently in play
 const QTIME = 30;           // default seconds per question
 const RING_C = 2 * Math.PI * 32; // circumference of timer ring (r=32)
 
-function broadcast(msg){ Object.values(conns).forEach(p => { try{ p.conn.send(msg); }catch(e){} }); }
+function setCurrent(obj){ if(gameRef) gameRef.child("current").set(obj); }
+function updateCurrent(obj){ if(gameRef) gameRef.child("current").update(obj); }
 
 let revealTimer = null;
 let revealDone = false;
@@ -562,62 +564,29 @@ function startHosting(){
   updateLobby();
   Sound.unlock(); Sound.startLobby();
 
-  if(peer){ try{ peer.destroy(); }catch(e){} }
-  peer = new Peer(PREFIX + pin, PEER_CONFIG);
+  if(typeof db === "undefined"){ $("lobbyStatus").textContent = "Firebase not loaded — check firebase-config.js."; return; }
+  gameRef = db.ref("games/" + pin);
+  gameRef.child("meta").set({ createdAt: Date.now(), phase: "lobby" })
+    .then(() => { $("lobbyStatus").textContent = "Ready! Share the PIN above."; })
+    .catch(e => { $("lobbyStatus").textContent = "Connection error: " + ((e && e.message) || e); });
+  gameRef.onDisconnect().remove();   // auto-clean the room if the host leaves
 
-  peer.on("open", () => { $("lobbyStatus").textContent = "Ready! Share the PIN above."; });
-
-  peer.on("connection", conn => {
-    conn.on("open", () => {
-      conn.on("data", data => handlePlayerData(conn, data));
+  // players joining / leaving
+  gameRef.child("players").on("value", snap => {
+    const val = snap.val() || {};
+    Object.keys(val).forEach(pid => {
+      if(!conns[pid]){
+        conns[pid] = { pid, name: val[pid].name, emoji: val[pid].emoji, score: val[pid].score || 0,
+          answered:false, lastChoice:null, lastElapsed:0, lastCorrect:false, lastDelta:0, rank:0, prevRank:0 };
+      } else {
+        conns[pid].name = val[pid].name; conns[pid].emoji = val[pid].emoji;
+      }
     });
-    conn.on("close", () => { delete conns[conn.peer]; updateLobby(); });
-    conn.on("error", () => {});
-  });
-
-  peer.on("error", e => {
-    console.warn("Peer error:", e.type, e);
-    if(e.type === "unavailable-id"){
-      $("lobbyStatus").textContent = "PIN in use, getting a new one…";
-      setTimeout(startHosting, 300);
-    } else if(e.type === "network" || e.type === "server-error" || e.type === "socket-error"){
-      $("lobbyStatus").textContent = "Network issue — reconnecting…";
+    if(curQ < 0){   // only reflect leaves / refresh the lobby before the game starts
+      Object.keys(conns).forEach(pid => { if(!val[pid]) delete conns[pid]; });
+      updateLobby();
     }
   });
-
-  peer.on("disconnected", () => { try{ peer.reconnect(); }catch(e){} });
-}
-
-function handlePlayerData(conn, data){
-  if(!data || typeof data !== "object") return;
-  if(data.type === "join"){
-    const name = (data.name||"Player").toString().slice(0,16).trim() || "Player";
-    const emoji = (data.emoji||"😀").toString().slice(0,4);
-    if(curQ >= 0){ conn.send({type:"joinDenied", reason:"Game already started."}); return; }
-    if(Object.keys(conns).length >= EMOJIS.length){ conn.send({type:"joinDenied", reason:"Game is full (max " + EMOJIS.length + " players)."}); return; }
-    conns[conn.peer] = {conn, name, emoji, score:0, answered:false, lastDelta:0, lastCorrect:false, rank:0, prevRank:0};
-    conn.send({type:"joined", name, emoji});
-    updateLobby();
-  }
-  else if(data.type === "answer"){
-    const p = conns[conn.peer];
-    if(!p || p.answered || curQ < 0 || !qLive) return;
-    const q = quiz[curQ];
-    if(typeof data.choice !== "number" || data.choice < 0 || data.choice >= q.a.length) return;
-    p.answered = true;
-    p.lastChoice = data.choice;
-    const elapsed = (Date.now() - qStart) / 1000;
-    const correct = data.choice === q.correct;
-    let delta = 0;
-    if(correct){
-      const frac = Math.max(0, 1 - (elapsed / curQTime)); // 1 = instant, 0 = used all the time
-      delta = Math.round(200 + 800 * frac);            // speed matters a lot: ~1000 fast, ~200 slow
-    }
-    p.lastCorrect = correct; p.lastDelta = delta; p.score += delta;
-    conn.send({type:"answerAck"});
-    updateAnsweredCount();
-    if(everyoneAnswered()) endQuestion();
-  }
 }
 
 function everyoneAnswered(){
@@ -640,7 +609,7 @@ $("cancelHostLink").onclick = () => { teardownPeer(); show("home"); };
 $("startGameBtn").onclick = () => {
   if(!Object.keys(conns).length) return;
   Sound.unlock(); Sound.stopLobby();
-  broadcast({type:"getReady"});
+  setCurrent({ phase: "getready" });
   runCountdown(() => nextQuestion());
 };
 
@@ -661,9 +630,29 @@ function nextQuestion(){
 
   curQTime = Math.max(5, Math.min(120, parseInt(q.time) || 30));
 
-  // players view (send the answer texts so phones can show them on the buttons)
-  broadcast({type:"question", index:curQ, total:quiz.length, question:q.q,
-             answers:q.a, count:q.a.length, time:curQTime});
+  // publish the question for players
+  if(gameRef) gameRef.child("meta/phase").set("playing");
+  setCurrent({ index: curQ, total: quiz.length, question: q.q, answers: q.a,
+               count: q.a.length, time: curQTime, phase: "question", correct: null });
+
+  // listen for this question's answers
+  if(answersUnsub){ answersUnsub(); answersUnsub = null; }
+  if(gameRef){
+    const aref = gameRef.child("answers/" + curQ);
+    const acb = aref.on("value", snap => {
+      const val = snap.val() || {};
+      Object.keys(val).forEach(pid => {
+        if(conns[pid] && !conns[pid].answered){
+          conns[pid].answered = true;
+          conns[pid].lastChoice = val[pid].choice;
+          conns[pid].lastElapsed = val[pid].elapsed;
+        }
+      });
+      updateAnsweredCount();
+      if(qLive && everyoneAnswered()) endQuestion();
+    });
+    answersUnsub = () => aref.off("value", acb);
+  }
 
   qStart = Date.now();
   qLive = true;
@@ -688,7 +677,21 @@ function endQuestion(){
   if(curQ < 0 || !qLive) return;
   qLive = false;
   Sound.stopTension();
+  if(answersUnsub){ answersUnsub(); answersUnsub = null; }
   const q = quiz[curQ];
+
+  // compute scores from the recorded answers (speed-based)
+  Object.values(conns).forEach(p => {
+    let delta = 0, correct = false;
+    if(p.answered && typeof p.lastChoice === "number"){
+      correct = p.lastChoice === q.correct;
+      if(correct){
+        const frac = Math.max(0, 1 - ((p.lastElapsed || curQTime) / curQTime));
+        delta = Math.round(200 + 800 * frac);
+      }
+    }
+    p.lastCorrect = correct; p.lastDelta = delta; p.score += delta;
+  });
 
   // record this question's results (who chose what) for post-game analysis
   const counts = q.a.map(() => 0);
@@ -711,13 +714,18 @@ function endQuestion(){
   const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
   ranked.forEach((p,i)=>p.rank=i+1);
 
-  // tell each player their result
-  Object.values(conns).forEach(p => {
-    try{
-      p.conn.send({type:"reveal", correct:p.lastCorrect, delta:p.lastDelta,
-                   score:p.score, rank:p.rank, total:ranked.length});
-    }catch(e){}
-  });
+  // push scores + reveal to the players
+  if(gameRef){
+    const updates = {};
+    Object.values(conns).forEach(p => {
+      updates["players/" + p.pid + "/score"] = p.score;
+      updates["players/" + p.pid + "/rank"] = p.rank;
+      updates["players/" + p.pid + "/lastDelta"] = p.lastDelta;
+      updates["players/" + p.pid + "/lastCorrect"] = p.lastCorrect;
+    });
+    gameRef.update(updates);
+    updateCurrent({ phase: "reveal", correct: q.correct, nplayers: ranked.length });
+  }
 
   // Give everyone ~5s to see the correct answer, then scoreboard (or winners on the last question)
   setTimeout(()=>{
@@ -737,23 +745,16 @@ function endQuestion(){
         <span class="pts">${p.score}</span></div>`;
     }).join("") || `<div class="item"><span>No players</span><span></span></div>`;
     $("nextBtn").textContent = "Skip →";
-    // Each player sees their own score + position (normal questions only — the last one stays a surprise)
-    Object.values(conns).forEach(p => {
-      const move = p.prevRank > 0 ? (p.prevRank - p.rank) : 0;
-      try{ p.conn.send({type:"standings", rank:p.rank, score:p.score, total:ranked.length, move}); }catch(e){}
-    });
+    if(gameRef) updateCurrent({ phase: "standings", nplayers: ranked.length });
     startRevealCountdown(false);
   }, 5000);
 }
 
 $("nextBtn").onclick = () => advanceFromReveal(curQ+1 >= quiz.length);
 
-function endGame(){ broadcastEnd(); showFinal(); }
-
-function broadcastEnd(){
-  const ranked = Object.values(conns).sort((a,b)=>b.score-a.score);
-  ranked.forEach((p,i)=>p.rank=i+1);
-  ranked.forEach(p => { try{ p.conn.send({type:"gameOver", score:p.score, rank:p.rank, total:ranked.length}); }catch(e){} });
+function endGame(){
+  if(gameRef){ updateCurrent({ phase: "final" }); gameRef.child("meta/phase").set("ended"); }
+  showFinal();
 }
 function showFinal(){
   show("hostFinal");
@@ -803,25 +804,36 @@ function teardownPeer(){
   Sound.stopLobby();
   Sound.stopTension();
   Sound.stopDrumroll();
-  try{ broadcast({type:"kicked"}); }catch(e){}
-  if(peer){ try{ peer.destroy(); }catch(e){} peer=null; }
+  if(answersUnsub){ answersUnsub(); answersUnsub = null; }
+  if(gameRef){
+    try{ gameRef.child("players").off(); }catch(e){}
+    try{ gameRef.onDisconnect().cancel(); }catch(e){}
+    try{ gameRef.remove(); }catch(e){}   // closes the room for everyone
+    gameRef = null;
+  }
   conns={}; curQ=-1; pin=null;
 }
 
 /* ===========================================================
-   PLAYER GAME LOGIC (PeerJS)
+   PLAYER GAME LOGIC (Firebase Realtime Database)
 =========================================================== */
-let myPeer = null;
-let hostConn = null;
 let myName = "";
 let myEmoji = "😀";
 let answeredThis = false;
+let myGameRef = null;       // db.ref("games/"+pin)
+let myPid = null;           // this player's id within the game
+let myData = {};            // my own player node (score, rank, lastDelta, lastCorrect)
+let myChoice = null;
+let curPlayIndex = -1;
+let pQStart = 0;
+let playerPhase = "";
+let lastCorrectIdx = -1;
+let lastNplayers = 0;
 
 $("joinBtn").onclick = joinGame;
 $("joinPin").addEventListener("keydown", e=>{ if(e.key==="Enter") $("joinName").focus(); });
 $("joinName").addEventListener("keydown", e=>{ if(e.key==="Enter") joinGame(); });
 
-let joinPinVal = "", joinTries = 0;
 function joinGame(){
   Sound.unlock();
   const p = $("joinPin").value.replace(/\D/g,"").slice(0,6);
@@ -829,117 +841,89 @@ function joinGame(){
   const status = $("joinStatus");
   if(p.length !== 6){ status.textContent = "Enter the 6-digit PIN."; return; }
   if(!n){ status.textContent = "Enter a nickname."; return; }
-  if(typeof Peer === "undefined"){ status.textContent = "Couldn't load the game engine — disable content blockers or try another browser."; return; }
+  if(typeof db === "undefined"){ status.textContent = "Couldn't load Firebase — check your internet."; return; }
   myName = n; myEmoji = selectedEmoji;
-  $("joinBtn").disabled = true;
-  joinPinVal = p; joinTries = 0;
-  connectToHost();
-}
-// Safari/iOS often fails the first WebRTC attempt — retry automatically a few times
-function connectToHost(){
-  const p = joinPinVal, status = $("joinStatus");
-  status.textContent = joinTries === 0 ? "Connecting…" : "Reconnecting… (attempt " + (joinTries+1) + ")";
-  if(myPeer){ try{ myPeer.destroy(); }catch(e){} }
-  myPeer = new Peer(PEER_CONFIG);
+  $("joinBtn").disabled = true; status.textContent = "Joining…";
 
-  let connected = false, settled = false;
-  const giveUp = setTimeout(() => {
-    if(connected || settled) return;
-    settled = true;
-    try{ myPeer.destroy(); }catch(e){}
-    if(joinTries < 2){ joinTries++; connectToHost(); }   // auto-retry
-    else { status.textContent = "Couldn't connect. On iPhone, try the Chrome app — or check your internet."; $("joinBtn").disabled = false; }
-  }, 11000);
-
-  myPeer.on("open", () => {
-    hostConn = myPeer.connect(PREFIX + p, {reliable:true});
-    hostConn.on("open", () => {
-      connected = true; settled = true; clearTimeout(giveUp);
-      hostConn.send({type:"join", name:myName, emoji:myEmoji});
-    });
-    hostConn.on("data", handleHostData);
-    hostConn.on("close", () => {
-      if(connected){ $("pwTitle").textContent="Game ended"; $("pwMsg").textContent="The host closed the game."; show("playerWait"); }
-    });
-    hostConn.on("error", () => {});
-  });
-
-  myPeer.on("error", e => {
-    if(e.type === "peer-unavailable"){
-      if(settled) return;
-      settled = true; clearTimeout(giveUp);
-      status.textContent = "No game found with that PIN.";
-      $("joinBtn").disabled = false;
-      try{ myPeer.destroy(); }catch(e){}
-      return;
-    }
-    // transient (network / server / webrtc) → let the timeout trigger an auto-retry
-  });
-}
-
-function handleHostData(data){
-  if(!data || typeof data !== "object") return;
-  switch(data.type){
-    case "joined":
+  const gref = db.ref("games/" + p);
+  gref.child("meta").get().then(metaSnap => {
+    const meta = metaSnap.val();
+    if(!meta){ status.textContent = "No game found with that PIN."; $("joinBtn").disabled = false; return; }
+    if(meta.phase && meta.phase !== "lobby"){ status.textContent = "Game already started."; $("joinBtn").disabled = false; return; }
+    return gref.child("players").get().then(pSnap => {
+      const players = pSnap.val() || {};
+      if(Object.keys(players).length >= EMOJIS.length){ status.textContent = "Game is full (max " + EMOJIS.length + " players)."; $("joinBtn").disabled = false; return; }
+      myPid = "p_" + Math.random().toString(36).slice(2, 10);
+      myGameRef = gref;
+      const meRef = gref.child("players/" + myPid);
+      meRef.set({ name: myName, emoji: myEmoji, score: 0 });
+      meRef.onDisconnect().remove();
+      meRef.on("value", s => {
+        myData = s.val() || {};
+        if(playerPhase === "reveal") renderReveal();
+        else if(playerPhase === "standings") renderStandings();
+      });
+      gref.child("current").on("value", s => handleCurrent(s.val()));
+      gref.child("meta").on("value", s => { if(!s.exists()) onHostGone(); });
+      status.textContent = "";
       $("joinBtn").disabled = false;
       $("pwTitle").textContent = "You're in!";
       $("pwName").textContent = myEmoji + " " + myName;
       $("pwMsg").textContent = "Waiting for the host to start…";
       show("playerWait");
       Sound.startLobby();
-      break;
-    case "joinDenied":
-      $("joinStatus").textContent = data.reason || "Can't join.";
-      $("joinBtn").disabled = false;
-      try{ myPeer.destroy(); }catch(e){}
-      break;
-    case "getReady":
+    });
+  }).catch(err => {
+    console.warn(err);
+    status.textContent = "Connection error. Try again.";
+    $("joinBtn").disabled = false;
+  });
+}
+
+function onHostGone(){
+  Sound.stopTension(); Sound.stopLobby(); Sound.stopDrumroll();
+  $("pwTitle").textContent = "Game ended";
+  $("pwName").textContent = "";
+  $("pwMsg").textContent = "The host closed the game.";
+  show("playerWait");
+}
+
+function handleCurrent(c){
+  if(!c || !c.phase) return;
+  switch(c.phase){
+    case "getready":
+      playerPhase = "getready";
       $("pwTitle").textContent = "Get ready!";
       $("pwName").textContent = myEmoji + " " + myName;
-      $("pwMsg").textContent = "Starting in 3… 2… 1…";
+      $("pwMsg").textContent = "The game is starting…";
       show("playerWait");
       break;
     case "question":
-      showPlayerQuestion(data);
-      break;
-    case "answerAck":
-      $("pfIcon").textContent = "✔";
-      $("pfText").textContent = "Answer locked in!";
-      $("pfScore").textContent = "";
-      $("pfRank").textContent = "Waiting for results…";
-      show("playerFeedback");
+      if(curPlayIndex !== c.index){ playerPhase = "question"; showPlayerQuestion(c); }
       break;
     case "reveal":
-      showPlayerReveal(data);
+      lastCorrectIdx = (typeof c.correct === "number") ? c.correct : -1;
+      if(playerPhase !== "reveal"){
+        playerPhase = "reveal";
+        Sound.stopTension();
+        (myChoice === lastCorrectIdx) ? Sound.correct() : Sound.wrong();
+      }
+      renderReveal();
       break;
     case "standings":
-      showPlayerStandings(data);
+      playerPhase = "standings";
+      lastNplayers = c.nplayers || 0;
+      renderStandings();
       break;
-    case "gameOver":
-      // Winner is revealed ONLY on the host screen — phones just build the hype
-      Sound.stopTension(); Sound.stopLobby();
-      $("pfIcon").textContent = "🥁";
-      $("pfText").textContent = "Winners presentation!";
-      $("pfScore").textContent = "";
-      $("pfRank").textContent = "👀 Watch the main screen…";
-      show("playerFeedback");
-      Sound.startDrumroll(); Sound.accelerate(16, 9000);
-      setTimeout(() => {
-        Sound.stopDrumroll();
-        $("pfIcon").textContent = "🎉";
-        $("pfText").textContent = "Check the winners on the screen!";
-        $("pfRank").textContent = "Thanks for playing!";
-      }, 9500);
-      break;
-    case "kicked":
-      $("pwTitle").textContent="Game ended"; $("pwMsg").textContent="The host closed the game.";
-      show("playerWait");
+    case "final":
+      if(playerPhase !== "final"){ playerPhase = "final"; showPlayerGameOver(); }
       break;
   }
 }
 
 function showPlayerQuestion(d){
-  answeredThis = false;
+  answeredThis = false; myChoice = null;
+  curPlayIndex = d.index; pQStart = Date.now();
   show("playerAnswer");
   Sound.stopLobby(); Sound.startTension();
   $("paProgress").textContent = `Q${d.index+1} / ${d.total}`;
@@ -954,43 +938,58 @@ function showPlayerQuestion(d){
     grid.appendChild(b);
   }
 }
+
 function sendAnswer(choice, btn){
   if(answeredThis) return;
-  answeredThis = true;
+  answeredThis = true; myChoice = choice;
   Sound.click();
   document.querySelectorAll("#paGrid .tap").forEach(el=>{ el.disabled=true; el.style.opacity=.4; });
   if(btn) btn.style.opacity = 1;
-  try{ hostConn.send({type:"answer", choice}); }catch(e){}
-}
-function showPlayerReveal(d){
-  show("playerFeedback");
-  Sound.stopTension();
-  if(d.correct){
-    $("pfIcon").textContent = "✅";
-    $("pfText").textContent = "Correct!";
-    Sound.correct();
-  } else {
-    $("pfIcon").textContent = "❌";
-    $("pfText").textContent = answeredThis ? "Wrong answer" : "Time's up!";
-    Sound.wrong();
+  const elapsed = Math.max(0, (Date.now() - pQStart) / 1000);
+  if(myGameRef && myPid && curPlayIndex >= 0){
+    try{ myGameRef.child("answers/" + curPlayIndex + "/" + myPid).set({ choice, elapsed }); }catch(e){}
   }
-  $("pfScore").textContent = d.delta > 0 ? "+" + d.delta + " points!" : "+0 points";
-  $("pfRank").textContent = "Total: " + d.score + " pts";
 }
-function showPlayerStandings(d){
+
+function renderReveal(){
   show("playerFeedback");
-  $("pfIcon").textContent = placeIcon(d.rank);
-  $("pfText").textContent = ordinal(d.rank) + " place";
-  $("pfScore").textContent = d.score + " pts";
-  const mv = d.move > 0 ? `▲ Up ${d.move}!` : d.move < 0 ? `▼ Down ${-d.move}` : "Holding steady";
-  $("pfRank").textContent = `${mv} • ${d.total} player${d.total===1?"":"s"}`;
-  $("pfText").classList.remove("pop-in"); void $("pfText").offsetWidth; $("pfText").classList.add("pop-in");
+  const correct = (myChoice === lastCorrectIdx);
+  $("pfIcon").textContent = correct ? "✅" : "❌";
+  $("pfText").textContent = correct ? "Correct!" : (answeredThis ? "Wrong answer" : "Time's up!");
+  const delta = myData.lastDelta || 0, score = myData.score || 0;
+  $("pfScore").textContent = delta > 0 ? "+" + delta + " points!" : "+0 points";
+  $("pfRank").textContent = "Total: " + score + " pts";
+}
+
+function renderStandings(){
+  show("playerFeedback");
+  const rank = myData.rank || 0, score = myData.score || 0;
+  $("pfIcon").textContent = placeIcon(rank);
+  $("pfText").textContent = rank ? (ordinal(rank) + " place") : "Your score";
+  $("pfScore").textContent = score + " pts";
+  $("pfRank").textContent = lastNplayers ? (lastNplayers + " player" + (lastNplayers===1?"":"s")) : "";
+}
+
+function showPlayerGameOver(){
+  Sound.stopTension(); Sound.stopLobby();
+  $("pfIcon").textContent = "🥁";
+  $("pfText").textContent = "Winners presentation!";
+  $("pfScore").textContent = "";
+  $("pfRank").textContent = "👀 Watch the main screen…";
+  show("playerFeedback");
+  Sound.startDrumroll(); Sound.accelerate(16, 9000);
+  setTimeout(() => {
+    Sound.stopDrumroll();
+    $("pfIcon").textContent = "🎉";
+    $("pfText").textContent = "Check the winners on the screen!";
+    $("pfRank").textContent = "Thanks for playing!";
+  }, 9500);
 }
 
 /* safety: clean up on unload */
 window.addEventListener("beforeunload", () => {
-  try{ if(peer) peer.destroy(); }catch(e){}
-  try{ if(myPeer) myPeer.destroy(); }catch(e){}
+  try{ if(gameRef) gameRef.remove(); }catch(e){}
+  try{ if(myGameRef && myPid) myGameRef.child("players/" + myPid).remove(); }catch(e){}
 });
 
 /* ---------------- Boot ---------------- */
