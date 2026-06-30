@@ -45,11 +45,21 @@ const SAMPLE = [
 ];
 
 /* ===========================================================
-   SOUND ENGINE (procedural — no audio files needed)
+   SOUND ENGINE
 =========================================================== */
+// 🎵 Lobby music: paste a DIRECT link to an .mp3 here (or a file in this repo, e.g. "music/lobby.mp3").
+//    Leave empty ("") to use the built-in chiptune instead.
+const LOBBY_MUSIC_URL = "";
+
 const Sound = (() => {
   let ctx = null, master = null, muted = false, lobbyTimer = null, step = 0;
   let tensionTimer = null, tStep = 0, drumTimer = null, drumAccel = null, drumInterval = 95;
+  let lobbyAudio = null;
+  function lobbyEl(){
+    if(!LOBBY_MUSIC_URL) return null;
+    if(!lobbyAudio){ lobbyAudio = new Audio(LOBBY_MUSIC_URL); lobbyAudio.loop = true; lobbyAudio.volume = 0.45; }
+    return lobbyAudio;
+  }
   const AC = window.AudioContext || window.webkitAudioContext;
   function ac(){
     if(!AC) return null;
@@ -111,8 +121,18 @@ const Sound = (() => {
     unlock(){ ac(); },
     isMuted(){ return muted; },
     setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.22; if(m){ this.stopLobby(); this.stopTension(); this.stopDrumroll(); } },
-    startLobby(){ if(!AC || muted) return; this.stopLobby(); step = 0; lobbyStep(); lobbyTimer = setInterval(lobbyStep, 185); },
-    stopLobby(){ if(lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer = null; } },
+    startLobby(){
+      if(muted) return;
+      this.stopLobby();
+      const el = lobbyEl();
+      if(el){ el.play().catch(()=>{}); return; }   // custom internet music
+      if(!AC) return;
+      step = 0; lobbyStep(); lobbyTimer = setInterval(lobbyStep, 185);   // built-in chiptune
+    },
+    stopLobby(){
+      if(lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer = null; }
+      if(lobbyAudio){ try{ lobbyAudio.pause(); }catch(e){} }
+    },
     startTension(){ if(!AC || muted) return; this.stopTension(); tStep = 0; tensionStep(); tensionTimer = setInterval(tensionStep, 165); },
     stopTension(){ if(tensionTimer){ clearInterval(tensionTimer); tensionTimer = null; } },
     click(){ if(muted) return; const c = ac(); if(c) tone(880, c.currentTime, 0.07, "square", 0.25); },
